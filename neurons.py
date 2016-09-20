@@ -23,7 +23,9 @@ class Bahl():
         # super(Bahl, self).__init__()
         neuron.h.load_file('bahl.hoc')
         self.cell = neuron.h.Bahl()
-        self.bias = neuron.h.IClamp(self.cell.soma(0.5))
+        self.synapses = [] 
+
+    def start_recording(self):
         self.v_record = neuron.h.Vector()
         self.v_record.record(self.cell.soma(0.5)._ref_v)
         self.ap_counter = neuron.h.APCount(self.cell.soma(0.5))
@@ -31,7 +33,6 @@ class Bahl():
         self.t_record.record(neuron.h._ref_t)
         self.spikes = neuron.h.Vector()
         self.ap_counter.record(neuron.h.ref(self.spikes))
-        self.synapses = [] 
 
     def set_voltage(self,V):
         self.cell.soma(0.5).v=V

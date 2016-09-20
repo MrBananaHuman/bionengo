@@ -1,7 +1,10 @@
 {
 	't_sample':0.1,
-	'popsize': 15,
+	't_run':0.1,
+	'n_bioneurons': 5,
 	'n_synapses':5,
-	'tau':0.01,
+	'tau':0.1,
+	'tau_filter':0.01,
 	'synapse_dist':'random',
+	'weight_scale':0.0005,
 }
