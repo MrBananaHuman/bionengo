@@ -19,9 +19,10 @@ from synapses import ExpSyn
 #         return spikes
 
 class Bahl():
+    
+    neuron.h.load_file('bahl.hoc')
     def __init__(self):
         # super(Bahl, self).__init__()
-        neuron.h.load_file('bahl.hoc')
         self.cell = neuron.h.Bahl()
         self.synapses = [] 
 
@@ -34,11 +35,12 @@ class Bahl():
         self.spikes = neuron.h.Vector()
         self.ap_counter.record(neuron.h.ref(self.spikes))
 
-    def set_voltage(self,V):
-        self.cell.soma(0.5).v=V
-
     def add_synapse(self,section,weight,tau):
         self.synapses.append(ExpSyn(section,weight,tau))
+
+    def copy_cell(self):
+        import copy
+        return copy.deepcopy(self.cell)
 
     # def rates_from_current(self, J):
     #     return np.interp(
