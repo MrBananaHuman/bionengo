@@ -1,10 +1,11 @@
 {
 	't_sample':0.1,
-	'dt':0.025,
+	'dt':0.000025,
 	'n_trials': 3,
 	'min_LIF_rate':200,
 	'max_LIF_rate':400,
-	'n_synapses':5,
+	'n_synapses':10,
+	'radius':1.0,
 	'dx':0.025,
 	'tau':0.1,
 	'tau_filter':0.01,
