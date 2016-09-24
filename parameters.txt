@@ -1,7 +1,6 @@
 {
 	't_sample':0.5,
 	'dt':0.000025,
-	'n_trials': 3,
 	'min_LIF_rate':200,
 	'max_LIF_rate':400,
 	'n_synapses':5,
@@ -13,5 +12,5 @@
 	'weight_min':-0.05,
 	'weight_max':0.05,
 	'optimization':'hyperopt',
-	'max_evals':10,
+	'max_evals':4000,
 }
