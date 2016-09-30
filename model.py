@@ -20,10 +20,38 @@ def make_search_space(P):
 		space[i]=hyperopt.hp.quniform('weights[%s]'%i,P['weight_min'],P['weight_max'],0.00001)
 	return space
 
-def make_spikes_in(P):
+def make_signal(P):
+	""" Returns: array indexed by t when called from a nengo Node"""
+	import signals
+	sP=P['signal']
+	dt=P['dt']
+	t_final=P['t_sample']+dt #why is this extra step necessary?
+	raw_signal=None
+	if sP['type']=='white':
+		raw_signal=signals.white(dt,t_final)
+	elif sP['type']=='white_binary':
+		raw_signal=signals.white_binary(dt,t_final,sP['mean'],sP['std'])
+	elif sP['type']=='switch':
+		raw_signal=signals.switch(dt,t_final,sP['max_freq'],)
+	elif sP['type']=='equalpower':
+		raw_signal=signals.equalpower(
+			dt,t_final,sP['max_freq'],sP['mean'],sP['std'])
+	elif sP['type']=='poisson_binary':
+		raw_signal=signals.poisson_binary(
+			dt,t_final,sP['mean_freq'],sP['max_freq'],sP['low'],sP['high'])
+	elif sP['type']=='poisson':
+		raw_signal=signals.poisson(
+			dt,t_final,sP['mean_freq'],sP['max_freq'])
+	elif sP['type']=='pink_noise':
+		raw_signal=signals.pink_noise(
+			dt,t_final,sP['mean'],sP['std'])
+	assert raw_signal is not None, "signal type not specified"
+	return raw_signal
+
+def make_spikes_in(P,raw_signal):
 	with nengo.Network() as model:
 		signal = nengo.Node(
-				output=lambda t: np.sin(2*np.pi*t/P['t_sample']))
+				output=lambda t: raw_signal[int(t/P['dt'])])
 				#rms=radius ensures that all max/min of signal bound max/min of eval_points?
 				# output=nengo.processes.WhiteSignal(P['t_sample'],high=40,rms=P['radius']))
 		ens_in = nengo.Ensemble(1,
@@ -33,7 +61,7 @@ def make_spikes_in(P):
 		probe_signal = nengo.Probe(signal) #get spikes from one neuron (one tuning curve)
 		probe_in = nengo.Probe(ens_in.neurons,'spikes')
 	with nengo.Simulator(model,dt=P['dt']) as sim:
-		sim.run(P['t_sample'])
+		sim.run(P['t_sample']) #-P['dt']
 		eval_points, activities = nengo.utils.ensemble.tuning_curves(ens_in,sim)
 	signal_in=sim.data[probe_signal]
 	spikes_in=sim.data[probe_in]
@@ -80,25 +108,34 @@ def plot_signals_spikes(P,LIFData,bioneuron,h,spikes_out):
 	plt.legend()
 	plt.show()
 
-def make_tuning_curves(P,LIFdata,bioneuron):
-	import seaborn as sns
-	h=np.exp(-P['timesteps']/(P['tau_filter'])) #smooth spikes with exponential synaptic filter
-	# h=h/np.sum(h) #normalize??
-	spikes_out=np.zeros_like(P['timesteps'])
-	for t in np.round(np.array(bioneuron.spikes),decimals=3):
-		spikes_out[t/P['dt']/1000.]=1.0
-	smoothed=np.array(np.convolve(spikes_out,h,mode='full')[:len(spikes_out)])
+def get_rates(P,bioneuron):
+	import rate_est
+	timesteps=P['timesteps']
+	spike_times=np.round(np.array(bioneuron.spikes),decimals=3)
+	spike_train=np.zeros_like(timesteps)
+	for idx in spike_times/P['dt']/1000: spike_train[idx]=1.0
+	kernel_type=P['kernel']['type']
+	rates=None
+	if np.any(np.array(['expon','gauss','expogauss','alpha'])==kernel_type):
+		rates=rate_est.kernel(timesteps,spike_train,kernel_type)
+	elif kernel_type=='adaptive':
+		rates=rate_est.adaptive_kernel(timesteps,spike_train)
+	elif kernel_type=='isi':
+		rates=rate_est.isi_smooth(timesteps,spike_train,P['kernel']['width'])
+	return rates
+
+def make_tuning_curves(P,LIFdata,rates):
 	X=np.arange(np.min(LIFdata['signal_in']),np.max(LIFdata['signal_in']),P['dx']) #eval points in X
 	Hz=np.zeros_like(X) #firing rate for each eval point
-
+	ipdb.set_trace()
 	for xi in range(len(X)-1): #foreach eval_point
 		ts=[] #find the time indices where the signal is between this and the next evalpoint
 		for ti in range(len(P['timesteps'])):
 			if X[xi] < LIFdata['signal_in'][ti] < X[xi+1]:
 				ts.append(ti)
 		if len(ts)>0:
-			#average the smoothed spike value at each of these time indices
-			Hz[xi]=np.average([smoothed[ti] for ti in ts])
+			#average the firing rate at each of these time indices
+			Hz[xi]=np.average([rates[ti] for ti in ts])
 			#convert units to Hz by dividing by the time window
 			Hz[xi]=Hz[xi]/(P['timesteps'][ts[-1]]-P['timesteps'][ts[0]])
 
@@ -151,17 +188,19 @@ def simulate(space):
 	print 'Running NEURON'
 	run_neuron(P,LIFdata,bioneuron)
 	print 'Calculating tuning curve and loss ...'
-	X_NEURON, Hz_NEURON = make_tuning_curves(P,LIFdata,bioneuron)
+	rates=get_rates(P,bioneuron)
+	X_NEURON, Hz_NEURON = make_tuning_curves(P,LIFdata,rates)
 	loss=calculate_loss(P,LIFdata,X_NEURON,Hz_NEURON)
 	return {'loss': loss, 'status': hyperopt.STATUS_OK}
 
 def main():
 	P=eval(open('parameters.txt').read())
 	print 'Generating input spikes ...'
+	raw_signal=make_signal(P)
 	spikes_in=[]
 	LIFdata={}
 	while np.sum(spikes_in)==0: #rerun nengo spike generator until it returns something
-		spikes_in, signal_in, X_LIF, Hz_LIF = make_spikes_in(P)
+		spikes_in, signal_in, X_LIF, Hz_LIF = make_spikes_in(P,raw_signal)
 	LIFdata['signal_in']=signal_in
 	LIFdata['spikes_in']=spikes_in
 	LIFdata['X_LIF']=X_LIF

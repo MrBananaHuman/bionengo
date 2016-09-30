@@ -1,14 +1,31 @@
 {
 	't_sample':0.5,
 	'dt':0.000025,
+	'signal':
+		{'type':'equalpower','max_freq':10.0,'mean':0.0,'std':1.0},
+		#{'type':'pink_noise','mean':0.0,'std':1.0},
+		#{'type':'poisson','mean_freq':5.0,'max_freq':10.0},
+		#{'type':'switch','max_freq':10.0,},
+		#{'type':'white_binary','mean':0.0,'std':1.0},
+		#{'type':'poisson_binary','mean_freq':5.0,'max_freq':10.0,'low':-1.0,'high':1.0},
+		#{'type':'white'},
+
 	'min_LIF_rate':200,
 	'max_LIF_rate':400,
-	'n_synapses':5,
 	'radius':1.0,
 	'dx':0.025,
 	'tau':0.1,
-	'tau_filter':0.01,
+	'n_synapses':5,
 	'synapse_dist':'random',
+
+	'kernel': #for smoothing spikes to calculate rate for tuning curve
+		{'type':'expon'},
+		#{'type':'gauss'},
+		#{'type':'expogauss'},
+		#{'type':'alpha'},
+		#{'type':'adaptive','width':0.05},
+		#{'type':'isi','midpoint':False,'interp':'zero'},
+
 	'weight_min':-0.05,
 	'weight_max':0.05,
 	'optimization':'hyperopt',
