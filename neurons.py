@@ -1,8 +1,8 @@
-from collections import namedtuple
+# from collections import namedtuple
 import neuron
 import numpy as np
 from synapses import ExpSyn
-
+import os
 
 # class NrnNeuron(NeuronType):
 #     """Marks neurons for simulation in Neuron."""
@@ -20,9 +20,9 @@ from synapses import ExpSyn
 
 class Bahl():
     
-    neuron.h.load_file('bahl.hoc')
     def __init__(self):
         # super(Bahl, self).__init__()
+        neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc')
         self.cell = neuron.h.Bahl()
         self.synapses = [] 
 
@@ -37,10 +37,6 @@ class Bahl():
 
     def add_synapse(self,section,weight,tau):
         self.synapses.append(ExpSyn(section,weight,tau))
-
-    def copy_cell(self):
-        import copy
-        return copy.deepcopy(self.cell)
 
     # def rates_from_current(self, J):
     #     return np.interp(

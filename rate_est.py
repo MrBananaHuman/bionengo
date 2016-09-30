@@ -64,7 +64,7 @@ def kernel(t, spikes, kind='expon'):
         kern = alpha**2 * tk * np.exp(-alpha*tk)
         rates = np.array([np.convolve(s, kern, mode='full')[:nt] for s in spikes])
 
-    return rates.reshape(shape)
+    return rates.reshape(shape), kern
 
 def isi_hold_function(t, spikes, midpoint=False, interp='zero'):
     """Estimate firing rate using ISIs, with zero-order interpolation
@@ -114,7 +114,7 @@ def isi_smooth(t, spikes, width=0.05, **kwargs):
     # for i in xrange(len(rates)):
         # rates[i] = np.convolve(rates[i], kern, mode='same')
 
-    return rates
+    return rates, kern
 
 def adaptive_kernel(t, spikes):
 
@@ -171,4 +171,4 @@ def adaptive_kernel(t, spikes):
     #     rate[tmask] += kern
 
 
-    return rate
+    return rate, kern

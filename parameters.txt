@@ -29,5 +29,5 @@
 	'weight_min':-0.05,
 	'weight_max':0.05,
 	'optimization':'hyperopt',
-	'max_evals':4000,
+	'max_evals':3,
 }
