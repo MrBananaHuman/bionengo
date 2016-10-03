@@ -14,14 +14,18 @@ import hyperopt
 import json
 import ipdb
 
+def make_addon(N):
+	import string
+	import random
+	addon=str(''.join(random.choice(string.ascii_uppercase+string.digits) for _ in range(N)))
+	return addon
+
 def ch_dir():
 	#change directory for data and plot outputs
 	import os
 	import sys
-	import string
-	import random
 	root=os.getcwd()
-	addon=str(''.join(random.choice(string.ascii_uppercase+string.digits) for _ in range(9)))
+	addon=make_addon(9)
 	datadir=''
 	if sys.platform == "linux" or sys.platform == "linux2" or sys.platform == "darwin":
 		datadir=root+'/data/'+addon #linux or mac
@@ -32,9 +36,11 @@ def ch_dir():
 	return datadir
 
 def make_search_space(P):
-	space={'P':P,}
-	for i in range(P['n_synapses']): #add a quniform weight for each synapse
-		space[i]=hyperopt.hp.quniform('weights[%s]'%i,P['weight_min'],P['weight_max'],0.00001)
+	space={'P':P,'weights':{},'locations':{},}
+	n_syn=P['synapses_per_connection']
+	for i in range(n_syn): #adds a hyperopt-distributed weight and location for each synapse
+		space['weights'][i]=hyperopt.hp.quniform('w'+str(i),P['weight_min'],P['weight_max'],0.000001)
+		space['locations'][i]=hyperopt.hp.uniform('l'+str(i),0,1)
 	return space
 
 def make_signal(P):
@@ -69,33 +75,42 @@ def make_spikes_in(P,raw_signal):
 	with nengo.Network() as model:
 		signal = nengo.Node(
 				output=lambda t: raw_signal[int(t/P['dt'])])
-				#rms=radius ensures that all max/min of signal bound max/min of eval_points?
-				# output=nengo.processes.WhiteSignal(P['t_sample'],high=40,rms=P['radius']))
+		ideal = nengo.Ensemble(1,
+				dimensions=1,
+				max_rates=nengo.dists.Uniform(P['min_LIF_rate'],P['max_LIF_rate']))
 		ens_in = nengo.Ensemble(1,
 				dimensions=1,
-				# radius=P['radius'],
-				max_rates=nengo.dists.Uniform(P['min_LIF_rate'],P['max_LIF_rate']))
-		probe_signal = nengo.Probe(signal) #get spikes from one neuron (one tuning curve)
+				max_rates=nengo.dists.Uniform(P['min_LIF_rate'],P['max_LIF_rate']))		
+		nengo.Connection(signal,ens_in)
+		probe_signal = nengo.Probe(signal)
 		probe_in = nengo.Probe(ens_in.neurons,'spikes')
 	with nengo.Simulator(model,dt=P['dt']) as sim:
-		sim.run(P['t_sample']) #-P['dt']
-		eval_points, activities = nengo.utils.ensemble.tuning_curves(ens_in,sim)
+		sim.run(P['t_sample'])
+		eval_points, activities = nengo.utils.ensemble.tuning_curves(ideal,sim)
 	signal_in=sim.data[probe_signal]
 	spikes_in=sim.data[probe_in]
-	#return neuron's spike raster and neuron tuning curve and tuning curve info
 	return spikes_in.ravel(), signal_in.ravel(), eval_points.ravel(), activities.ravel()
 
-def make_synapses(P,bioneuron,weights):
-	dist=None
+def make_synapses(P,bioneuron,weights,loc):
+	locations=None
 	if P['synapse_dist'] == 'random':
-		dist=np.random.uniform(0,1,size=P['n_synapses'])
-	for i in dist:
-		bioneuron.add_synapse(bioneuron.cell.apical(i),weights[i],P['tau'])
+		locations=np.random.uniform(0,1,size=len(bioneuron.synapses))
+	elif P['synapse_dist'] == 'linear':
+		locations=np.arange(0,1,1.0/len(bioneuron.synapses))
+	elif P['synapse_dist'] == 'optimized':
+		locations=loc
+	for i in range(len(locations)):
+		if P['biosynapse']['type'] == 'ExpSyn':
+			bioneuron.add_ExpSyn(
+				bioneuron.cell.apical(locations[i]),weights[i],P['biosynapse']['tau'])
+		elif P['biosynapse']['type'] == 'AlphaSyn':
+			bioneuron.add_AlphaSyn(
+				bioneuron.cell.apical(locations[i]),weights[i],P['biosynapse']['tau'])
 
-def make_bioneuron(P,weights):
+def make_bioneuron(P,weights,locations):
 	from neurons import Bahl
 	bioneuron=Bahl()
-	make_synapses(P,bioneuron,weights)
+	make_synapses(P,bioneuron,weights,locations)
 	bioneuron.start_recording()
 	return bioneuron
 
@@ -103,7 +118,7 @@ def run_neuron(P,LIFdata,bioneuron):
 	import sys
 	neuron.init()
 	for t in P['timesteps']: 
-		sys.stdout.write("\r%d%%" %(100*t/(P['t_sample'])))
+		sys.stdout.write("\r%d%%" %(1+100*t/(P['t_sample'])))
 		sys.stdout.flush()
 		if np.any(np.asfarray(np.where(LIFdata['spikes_in'])[0]) == t/P['dt']):
 			# print 'input spike at t=%s, idx=%s' %(t*1000, t/P['dt'])
@@ -111,37 +126,36 @@ def run_neuron(P,LIFdata,bioneuron):
 				syn.conn.event(t*1000)
 		neuron.run(t*1000)
 
-def plot_signals_spikes(timesteps,bioneuron,LIFdata,kernel,spike_train,rates):
-	sns.set(context='poster')
-	figure, (ax1,ax2,ax3) = plt.subplots(3,1)
-	ax1.plot(np.array(bioneuron.t_record), np.array(bioneuron.v_record))
-	ax1.set(xlabel='time (ms)', ylabel='voltage (mV)')
-	ax2.plot(kernel,label='kernel')
-	ax2.set(xlabel='time (s)', ylabel='filter value')
-	ax3.plot(timesteps,LIFdata['signal_in'],label='input signal')
-	ax3.plot(timesteps,LIFdata['spikes_in'],label='input spikes')
-	ax3.plot(timesteps,spike_train,label='output spikes')
-	ax3.plot(timesteps,spike_train,label='output rate')
-	ax3.set(xlabel='time (s)')
-	plt.legend()
-	# plt.show()
-
-def get_rates(P,bioneuron,LIFdata):
-	import rate_est
+def get_rates(P,bioneuron,LIFdata,addon):
 	timesteps=P['timesteps']
 	spike_times=np.round(np.array(bioneuron.spikes),decimals=3)
 	spike_train=np.zeros_like(timesteps)
+	if spike_times.shape[0] >= 20000: ipdb.set_trace()
 	for idx in spike_times/P['dt']/1000: spike_train[idx]=1.0
-	kernel_type=P['kernel']['type']
 	rates=np.zeros_like(spike_train)
-	if len(spike_times) == 0: return rates
-	if np.any(np.array(['expon','gauss','expogauss','alpha'])==kernel_type):
-		rates,kernel=rate_est.kernel(timesteps,spike_train,kernel_type)
-	elif kernel_type=='adaptive':
-		rates,kernel=rate_est.adaptive_kernel(timesteps,spike_train)
-	elif kernel_type=='isi':
-		rates,kernel=rate_est.isi_smooth(timesteps,spike_train,P['kernel']['width'])
-	# plot_signals_spikes(timesteps,bioneuron,LIFdata,kernel,spike_train,rates)
+	if P['kernel']['type'] == 'exp':
+		kernel = np.exp(-timesteps/P['kernel']['tau'])
+	elif P['kernel']['type'] == 'gauss':
+		kernel = np.exp(-timesteps**2/(2*P['kernel']['sigma']**2))
+	elif P['kernel']['type'] == 'alpha':  
+		kernel = (timesteps / P['kernel']['tau']) * np.exp(-timesteps / P['kernel']['tau'])
+	# kernel /= kernel.sum()
+	rates = np.convolve(kernel, spike_train, mode='full')[:len(timesteps)]
+
+	sns.set(context='poster')
+	figure, (ax1,ax2) = plt.subplots(2,1)
+	# figure, (ax1,ax2,ax3) = plt.subplots(3,1)
+	ax1.plot(np.array(bioneuron.t_record)/1000, np.array(bioneuron.v_record))
+	ax1.set(xlabel='time', ylabel='voltage (mV)')
+	ax2.plot(timesteps,LIFdata['signal_in'],label='input signal')
+	ax2.plot(timesteps,LIFdata['spikes_in'],label='input spikes')
+	# ax2.plot(timesteps,spike_train,label='output spikes')
+	ax2.plot(timesteps,rates,label='output rate')
+	ax2.set(xlabel='time (s)')
+	# ax3.plot(timesteps,kernel,label='kernel')
+	# ax3.set(xlabel='time (s)', ylabel='filter value')
+	plt.legend()
+	figure.savefig('spikes_' + addon +'.png')
 	return rates
 
 def make_tuning_curves(P,LIFdata,rates):
@@ -156,11 +170,10 @@ def make_tuning_curves(P,LIFdata,rates):
 			#average the firing rate at each of these time indices
 			Hz[xi]=np.average([rates[ti] for ti in ts])
 			#convert units to Hz by dividing by the time window
-			Hz[xi]=Hz[xi]/(P['timesteps'][ts[-1]]-P['timesteps'][ts[0]])
-
+			Hz[xi]=Hz[xi]/len(ts)/P['dt']
 	return X, Hz
 
-def calculate_loss(P,LIFdata,X_NEURON,Hz_NEURON):
+def calculate_loss(P,LIFdata,X_NEURON,Hz_NEURON,space,addon):
 	#shape of activities and Hz is mismatched, so interpolate and slice activities for comparison
 	from scipy.interpolate import interp1d
 	f_NEURON_rate = interp1d(X_NEURON,Hz_NEURON)
@@ -169,14 +182,17 @@ def calculate_loss(P,LIFdata,X_NEURON,Hz_NEURON):
 	x_max=np.minimum(LIFdata['X_LIF'][-1],X_NEURON[-1])
 	X=np.arange(x_min,x_max,P['dx'])
 	loss=np.sqrt(np.average((f_NEURON_rate(X)-f_LIF_rate(X))**2))
-
 	sns.set(context='poster')
+
 	figure, ax1 = plt.subplots(1,1)
 	ax1.plot(X,f_NEURON_rate(X),label='bioneuron firing rate (Hz)')
 	ax1.plot(X,f_LIF_rate(X),label='LIF firing rate (Hz)')
 	ax1.set(xlabel='x',ylabel='firing rate (Hz)',title='loss=%0.3f' %loss)
 	plt.legend()
-	figure.savefig('%0.3f.png'%loss)
+	figure.savefig('%0.3f_'%loss + addon +'.png')
+	plt.close(figure)
+	my_params=pd.DataFrame([space])
+	my_params.reset_index().to_json('parameters_' + addon + '%0.3f_'%loss + '.json',orient='records')
 
 	return loss
 
@@ -187,7 +203,6 @@ def plot_loss(trials):
 	Y=[t['result']['loss'] for t in trials]
 	ax1.scatter(X,Y)
 	ax1.set(xlabel='$t$',ylabel='loss')
-	# plt.show()
 	figure1.savefig('hyperopt_result.png')
 
 '''main---------------------------------------------------'''
@@ -196,21 +211,20 @@ def plot_loss(trials):
 def simulate(space):
 	P=space['P']
 	P['timesteps']=np.arange(0,P['t_sample'],P['dt'])
+	n_syn=P['synapses_per_connection']
 	with open("LIFdata.json") as data_file:    
 		LIFdata = json.load(data_file)[0]
-	weights=np.zeros(P['n_synapses'])
-	for i in space.iterkeys():
-		if i != 'P': 
-			weights[int(i)]=space[i]
-	bioneuron = make_bioneuron(P,weights)
-	print 'Running NEURON'
+	weights,locations=np.zeros(n_syn),np.zeros(n_syn)
+	for i in range(n_syn):
+		weights[i]=space['weights'][i]
+		locations[i]=space['locations'][i]
+	bioneuron = make_bioneuron(P,weights,locations)
+	print '\nRunning NEURON'
 	run_neuron(P,LIFdata,bioneuron)
-	print 'Calculating tuning curve and loss ...'
-	rates=get_rates(P,bioneuron,LIFdata)
+	addon=make_addon(6)
+	rates=get_rates(P,bioneuron,LIFdata,addon)
 	X_NEURON, Hz_NEURON = make_tuning_curves(P,LIFdata,rates)
-	loss=calculate_loss(P,LIFdata,X_NEURON,Hz_NEURON)
-	my_params=pd.DataFrame([space])
-	my_params.reset_index().to_json('parameters%0.3f.json'%loss,orient='records')
+	loss=calculate_loss(P,LIFdata,X_NEURON,Hz_NEURON,space,addon)
 	return {'loss': loss, 'status': hyperopt.STATUS_OK}
 
 def main():

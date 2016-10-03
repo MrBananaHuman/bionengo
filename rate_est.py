@@ -19,6 +19,20 @@ def get_spike_times(t, spikes):
         assert len(spikes) < len(t)
         return spikes
 
+def p_kernel(t, spikes, kind='expon'):
+    if kind == 'expon':
+        kern = sp.stats.expon.pdf(t)
+    elif kind == 'gauss':
+        kern = sp.stats.normal.pdf(t)
+    elif kind == 'alpha':
+        avg_rate = spikes.sum() / len(t)
+        kstd = 2. / avg_rate
+        alpha = 1. / kstd     
+        kern = alpha**2 * t * np.exp(-alpha*t)
+    kern /= kern.sum()
+    rates = np.array([np.convolve(kern, s, mode='full')[:len(t)] for s in spikes])
+    return rates, kern
+
 def kernel(t, spikes, kind='expon'):
 
     nt = len(t)
@@ -45,12 +59,15 @@ def kernel(t, spikes, kind='expon'):
     kind = kind.lower()
     if kind == 'expon':
         kern = sp.stats.expon.pdf(np.arange(0, 5*kstd, dt), scale=kstd)
+        # kern /= kern.sum()
         rates = np.array([np.convolve(kern, s, mode='full')[:nt] for s in spikes])
     elif kind == 'gauss':
         kern = sp.stats.normal.pdf(np.arange(-4*kstd, 4*kstd, dt), scale=kstd)
+        # kern /= kern.sum()
         rates = np.array([np.convolve(kern, s, mode='same') for s in spikes])
     elif kind == 'expogauss':
         kern = sp.stats.expon.pdf(np.arange(0, 5*kstd, dt), scale=kstd)
+        # kern /= kern.sum()
         rates = np.array([np.convolve(kern, s, mode='full')[:nt] for s in spikes])
 
         kstd2 = 1./(avg_rate*2)
@@ -62,6 +79,7 @@ def kernel(t, spikes, kind='expon'):
         alpha = 1. / kstd
         tk = np.arange(0, 5*kstd, dt)
         kern = alpha**2 * tk * np.exp(-alpha*tk)
+        # kern /= kern.sum()
         rates = np.array([np.convolve(s, kern, mode='full')[:nt] for s in spikes])
 
     return rates.reshape(shape), kern

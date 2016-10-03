@@ -1,7 +1,7 @@
 # from collections import namedtuple
 import neuron
 import numpy as np
-from synapses import ExpSyn
+from synapses import ExpSyn, AlphaSyn
 import os
 
 # class NrnNeuron(NeuronType):
@@ -35,8 +35,11 @@ class Bahl():
         self.spikes = neuron.h.Vector()
         self.ap_counter.record(neuron.h.ref(self.spikes))
 
-    def add_synapse(self,section,weight,tau):
+    def add_ExpSyn(self,section,weight,tau):
         self.synapses.append(ExpSyn(section,weight,tau))
+
+    def add_AlphaSyn(self,section,weight,tau):
+        self.synapses.append(AlphaSyn(section,weight,tau))
 
     # def rates_from_current(self, J):
     #     return np.interp(
