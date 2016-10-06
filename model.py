@@ -21,13 +21,15 @@ def simulate(space):
 	n_LIF=P['n_LIF']
 	with open(space['directory']+"LIFdata.json") as data_file:  #linux  
 		LIFdata = json.load(data_file)[0]
-	weights,locations=np.zeros((n_LIF,n_syn)),np.zeros((n_LIF,n_syn))
+	weights=np.zeros((n_LIF,n_syn))
+	locations=np.zeros((n_LIF,n_syn))
+	bias=space['bias']
 	for n in range(n_LIF):
 		for i in range(n_syn):
 			weights[n][i]=space['weights']['%s_%s'%(n,i)]
 			if P['synapse_dist'] == 'optimized': 
 				locations[n][i]=space['locations']['%s_%s'%(n,i)]
-	bioneuron = make_bioneuron(P,weights,locations)
+	bioneuron = make_bioneuron(P,weights,locations,bias)
 	print '\nRunning NEURON'
 	run_neuron(P,LIFdata,bioneuron)
 	addon=make_addon(6)
@@ -72,7 +74,7 @@ def main():
 		from hyperopt.mongoexp import MongoTrials
 		search_space=make_search_space(P)
 		search_space['directory']=datadir
-		trials=MongoTrials('mongo://localhost:1234/foo_db/jobs', exp_key='exp9')
+		trials=MongoTrials('mongo://localhost:1234/foo_db/jobs', exp_key='exp3')
 		best=hyperopt.fmin(simulate,space=search_space,algo=hyperopt.tpe.suggest,
 							max_evals=P['max_evals'],trials=trials)
 		plot_loss(trials,search_space)

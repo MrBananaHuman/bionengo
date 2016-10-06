@@ -23,12 +23,16 @@ def make_search_space(P):
 	import hyperopt
 	n_syn=P['synapses_per_connection']
 	n_LIF=P['n_LIF']
-	space={'P':P,'weights':{},'locations':{}}
+	space={'P':P,'weights':{},'locations':{},'bias':0}
 	for n in range(n_LIF):
 		for i in range(n_syn): #adds a hyperopt-distributed weight and location for each synapse
-			space['weights']['%s_%s'%(n,i)]=hyperopt.hp.quniform('w_%s_%s'%(n,i),P['weight_min'],P['weight_max'],0.000001)
+			space['weights']['%s_%s'%(n,i)]=\
+					hyperopt.hp.uniform('w_%s_%s'%(n,i),P['weight_min'],P['weight_max'])
+			space['bias']=\
+					hyperopt.hp.uniform('b',P['bias_min'],P['bias_max'])
 			if P['synapse_dist'] == 'optimized': 
-				space['locations']['%s_%s'%(n,i)]=hyperopt.hp.uniform('l_%s_%s'%(n,i),0,1)
+				space['locations']['%s_%s'%(n,i)]=\
+					hyperopt.hp.uniform('l_%s_%s'%(n,i),0,1)
 	return space
 
 def make_signal(P):
@@ -92,7 +96,7 @@ def make_spikes_in(P,raw_signal,datadir):
 	out_data.reset_index().to_json(datadir+'LIFdata.json',orient='records')
 	return LIFdata
 
-def make_bioneuron(P,weights,loc):
+def make_bioneuron(P,weights,loc,bias):
 	import numpy as np
 	from neurons import Bahl
 	bioneuron=Bahl()
@@ -107,6 +111,7 @@ def make_bioneuron(P,weights,loc):
 	elif P['synapse_dist'] == 'optimized':
 		locations=loc
 	for n in range(n_LIF):
+		bioneuron.add_bias(bias)
 		bioneuron.add_connection(n)
 		for i in range(n_syn):
 			syn_type=P['synapse_type']

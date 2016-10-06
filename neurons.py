@@ -20,6 +20,13 @@ class Bahl():
         self.spikes = neuron.h.Vector()
         self.ap_counter.record(neuron.h.ref(self.spikes))
 
+    def add_bias(self,bias):
+        self.bias = bias
+        self.bias_current = neuron.h.IClamp(self.cell.soma(0.5))
+        self.bias_current.delay = 0
+        self.bias_current.dur = 1e9  # TODO; limits simulation time
+        self.bias_current.amp = self.bias
+
     def add_connection(self,idx):
         self.connections[idx]=[] #a list of each synapse in this connection 
 

@@ -16,15 +16,17 @@ def get_rates(P,bioneuron,LIFdata,addon,space):
 		kernel = np.exp(-timesteps/P['kernel']['tau'])
 		rates = np.convolve(kernel, spike_train, mode='full')[:len(timesteps)]
 	elif P['kernel']['type'] == 'gauss':
-		kernel = np.exp(-timesteps**2/(2*P['kernel']['sigma']**2))
-		rates = np.convolve(kernel, spike_train, mode='full')[:len(timesteps)]
+		tkern = np.arange(-timesteps[-1]/4,timesteps[-1]/4,P['dt'])
+		kernel = np.exp(-tkern**2/(2*P['kernel']['sigma']**2))
+		rates = np.convolve(kernel, spike_train, mode='same')
 	elif P['kernel']['type'] == 'alpha':  
 		kernel = (timesteps / P['kernel']['tau']) * np.exp(-timesteps / P['kernel']['tau'])
 		rates = np.convolve(kernel, spike_train, mode='full')[:len(timesteps)]
 	elif P['kernel']['type'] == 'isi_smooth':
 		f=isi_hold_function(timesteps,spike_times,midpoint=False)
 		interp=f(spike_times)
-		kernel = np.exp(-timesteps**2/(2*P['kernel']['sigma']**2)) #gaussian
+		tkern = np.arange(-timesteps[-1]/4,timesteps[-1]/4,P['dt'])
+		kernel = np.exp(-tkern**2/(2*P['kernel']['sigma']**2))
 		rates = np.convolve(kernel, interp, mode='full')[:len(timesteps)]
 	# kernel /= kernel.sum()
 
