@@ -1,6 +1,6 @@
 {
 	't_sample':0.1, #about 12 hours runtime for 1.0 sec with 100 nLIF
-	'dt':0.0001,
+	'dt':0.000025,
 	'n_LIF':3, #255+/-13 according to Markram et al 2015
 	'signal':
 		{'type':'equalpower','max_freq':30.0,'mean':0.0,'std':1.0},

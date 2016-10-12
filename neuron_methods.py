@@ -31,9 +31,10 @@ def run_bioneuron(P,LIFdata,bioneuron):
 	import numpy as np
 	import neuron
 	import sys
+	timesteps=np.arange(0,P['t_sample'],P['dt'])
 	neuron.h.dt = P['dt'] * 1000
 	neuron.init()
-	for t in P['timesteps']: 
+	for t in timesteps: 
 		sys.stdout.write("\r%d%%" %(1+100*t/(P['t_sample'])))
 		sys.stdout.flush()
 		t_idx=np.rint(t/P['dt'])

@@ -75,38 +75,18 @@ def make_spikes_in(P,raw_signal,datadir):
 		signal_in=sim.data[probe_signal]
 		spikes_in=sim.data[probe_in]
 	LIFdata['signal_in']=signal_in.ravel()
-	LIFdata['spikes_in']=spikes_in*P['dt']
-	LIFdata['X_LIF']=eval_points.ravel()
-	LIFdata['Hz_LIF']=activities.ravel()
+	LIFdata['spikes_in']=spikes_in
+	LIFdata['lif_eval_points']=eval_points.ravel()
+	LIFdata['lif_activities']=activities.ravel()
 	out_data=pd.DataFrame([LIFdata])
 	out_data.reset_index().to_json(datadir+'LIFdata.json',orient='records')
 	return LIFdata
 
-def make_bioneuron(P,weights,loc,bias):
+def find_w_max(P,LIFdata):
 	import numpy as np
-	from neurons import Bahl
-	bioneuron=Bahl()
-	#make connections and populate with synapses
-	locations=None
-	n_syn=P['synapses_per_connection']
-	n_LIF=P['n_LIF']	
-	if P['synapse_dist'] == 'soma':
-		locations=np.ones(shape=(n_LIF,n_syn))*0.5
-	if P['synapse_dist'] == 'random':
-		locations=np.random.uniform(0,1,size=(n_LIF,n_syn))
-	elif P['synapse_dist'] == 'optimized':
-		locations=loc
-	for n in range(n_LIF):
-		bioneuron.add_bias(bias)
-		bioneuron.add_connection(n)
-		for i in range(n_syn):
-			syn_type=P['synapse_type']
-			if P['synapse_dist'] == 'soma': section=bioneuron.cell.soma(locations[n][i])
-			else: section=bioneuron.cell.apical(locations[n][i])
-			weight=weights[n][i]
-			tau=P['synapse_tau']
-			tau2=P['synapse_tau2']
-			bioneuron.add_synapse(n,syn_type,section,weight,tau,tau2)
-	#initialize recording attributes
-	bioneuron.start_recording()
-	return bioneuron
+	from analyze import get_rates
+	summed_rates=get_rates(P,LIFdata['spikes_in'])
+	rate_max=np.amax(summed_rates)
+	w_max=175.0/rate_max*0.01*200 #175 hz input from 0.01 max weight in response curve
+	print summed_rates,w_max
+	return w_max
