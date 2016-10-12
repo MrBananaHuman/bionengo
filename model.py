@@ -55,9 +55,9 @@ def simulate(hyp_params):
 	import hyperopt
 	import json
 	import ipdb
-	from initialize import make_addon, make_bioneuron
+	from initialize import make_addon
 	from analyze import get_rates, make_tuning_curves
-	from run import run_neuron
+	from neuron_methods import make_bioneuron, run_bioneuron
 	import timeit
 
 	start=timeit.default_timer()
@@ -101,6 +101,7 @@ def main():
 	print 'Generating input spikes ...'
 	raw_signal=make_signal(P)
 	LIFdata=make_spikes_in(P,raw_signal,datadir)
+	w_max=find_w_max(P,LIFdata)
 
 	if P['optimization']=='hyperopt':
 		hyp_params=make_hyp_params(P)
