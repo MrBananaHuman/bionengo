@@ -1,4 +1,4 @@
-def get_rates(P,bioneuron,LIFdata,addon,space):
+def get_rates(P,bioneuron,LIFdata,addon,hyp_params):
 	import numpy as np
 	import matplotlib.pyplot as plt
 	import seaborn as sns
@@ -46,7 +46,7 @@ def get_rates(P,bioneuron,LIFdata,addon,space):
 	# ax3.plot(timesteps,kernel,label='kernel')
 	# ax3.set(xlabel='time (s)', ylabel='filter value')
 	plt.legend()
-	figure.savefig(space['directory']+addon+'_spikes.png')
+	figure.savefig(hyp_params['directory']+addon+'_spikes.png')
 	plt.close(figure)
 	return rates
 
@@ -66,37 +66,7 @@ def make_tuning_curves(P,LIFdata,rates):
 			Hz[xi]=Hz[xi]/len(ts)/P['dt']
 	return X, Hz
 
-def calculate_loss(P,LIFdata,X_NEURON,Hz_NEURON,space,addon):
-	import numpy as np
-	import matplotlib.pyplot as plt
-	import seaborn as sns
-	import pandas as pd
-	import json
-	import ipdb
-	#shape of activities and Hz is mismatched, so interpolate and slice activities for comparison
-	from scipy.interpolate import interp1d
-	f_NEURON_rate = interp1d(X_NEURON,Hz_NEURON)
-	f_LIF_rate = interp1d(np.array(LIFdata['X_LIF']),np.array(LIFdata['Hz_LIF']))
-	x_min=np.maximum(LIFdata['X_LIF'][0],X_NEURON[0])
-	x_max=np.minimum(LIFdata['X_LIF'][-1],X_NEURON[-1])
-	X=np.arange(x_min,x_max,P['dx'])
-	loss=np.sqrt(np.average((f_NEURON_rate(X)-f_LIF_rate(X))**2))
-	sns.set(context='poster')
-
-	figure, ax1 = plt.subplots(1,1)
-	ax1.plot(X,f_NEURON_rate(X),label='bioneuron firing rate (Hz)')
-	ax1.plot(X,f_LIF_rate(X),label='LIF firing rate (Hz)')
-	ax1.set(xlabel='x',ylabel='firing rate (Hz)',title='loss=%0.3f' %loss)
-	plt.legend()
-	figure.savefig(space['directory']+'tuning_curve_%0.3f_'%loss + addon + '.png')
-	plt.close(figure)
-	my_params=pd.DataFrame([space])
-	my_params.reset_index().to_json(space['directory']+addon+\
-						'_parameters_%0.3f_'%loss+'.json',orient='records')
-
-	return loss
-
-def plot_loss(trials,space):
+def plot_loss(trials,hyp_params):
 	import matplotlib.pyplot as plt
 	import seaborn as sns
 	sns.set(context='poster')
@@ -105,7 +75,7 @@ def plot_loss(trials,space):
 	Y=[t['result']['loss'] for t in trials]
 	ax1.scatter(X,Y)
 	ax1.set(xlabel='$t$',ylabel='loss')
-	figure1.savefig(space['directory']+'hyperopt_result.png')
+	figure1.savefig(hyp_params['directory']+'hyperopt_result.png')
 
 
 def isi_hold_function(t, spike_times, midpoint=False, interp='zero'):

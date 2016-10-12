@@ -7,6 +7,8 @@ import scipy as sp
 import scipy.interpolate
 import scipy.stats
 
+def constant(dt,t_final,value):
+    return np.ones(int(t_final/dt))*1.0*value
 
 def equalpower(dt, t_final, max_freq, mean=0.0, std=1.0, n=None):
     """Generate a random signal with equal power below a maximum frequency

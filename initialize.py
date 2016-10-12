@@ -19,22 +19,6 @@ def ch_dir():
 	os.chdir(datadir) 
 	return datadir
 
-def make_search_space(P):
-	import hyperopt
-	n_syn=P['synapses_per_connection']
-	n_LIF=P['n_LIF']
-	space={'P':P,'weights':{},'locations':{},'bias':0}
-	for n in range(n_LIF):
-		for i in range(n_syn): #adds a hyperopt-distributed weight and location for each synapse
-			space['weights']['%s_%s'%(n,i)]=\
-					hyperopt.hp.uniform('w_%s_%s'%(n,i),P['weight_min'],P['weight_max'])
-			space['bias']=\
-					hyperopt.hp.uniform('b',P['bias_min'],P['bias_max'])
-			if P['synapse_dist'] == 'optimized': 
-				space['locations']['%s_%s'%(n,i)]=\
-					hyperopt.hp.uniform('l_%s_%s'%(n,i),0,1)
-	return space
-
 def make_signal(P):
 	""" Returns: array indexed by t when called from a nengo Node"""
 	import signals
@@ -42,6 +26,8 @@ def make_signal(P):
 	dt=P['dt']
 	t_final=P['t_sample']+dt #why is this extra step necessary?
 	raw_signal=None
+	if sP['type']=='constant':
+		raw_signal=signals.constant(dt,t_final,sP['value'])
 	if sP['type']=='white':
 		raw_signal=signals.white(dt,t_final)
 	elif sP['type']=='white_binary':
