@@ -40,22 +40,22 @@ def get_rates(P,spikes):
 	return spike_train, rates
 
 
-def make_tuning_curves(P,LIFdata,biorates):
+def make_tuning_curves(P,lifdata,biorates):
 	import numpy as np
 	import ipdb
 
-	X=np.arange(np.min(LIFdata['signal_in']),np.max(LIFdata['signal_in']),P['dx']) #eval points in X
+	X=np.arange(np.min(lifdata['signal_in']),np.max(lifdata['signal_in']),P['dx']) #eval points in X
 	Hz=np.zeros_like(X) #firing rate for each eval point
 	for xi in range(len(X)-1):
 		ts=[] #find the time indices where the signal is between this and the next evalpoint
 		for ti in range(len(np.arange(0,P['t_sample'],P['dt']))):
-			if X[xi] < LIFdata['signal_in'][ti] < X[xi+1]:
+			if X[xi] < lifdata['signal_in'][ti] < X[xi+1]:
 				ts.append(ti)
 		if len(ts)>0:
 			#average the firing rate at each of these time indices
 			Hz[xi]=np.average([biorates[ti] for ti in ts])
 			#convert units to Hz by dividing by the time window
-			Hz[xi]=Hz[xi]/len(ts)
+			# Hz[xi]=Hz[xi]/len(ts)
 	return X, Hz
 
 
@@ -91,7 +91,7 @@ def plot_rates(P,bioneuron,biospikes,biorates,raw_signal,lif_spikes,run_id):
 	ax1.plot(np.array(bioneuron.t_record)/1000, np.array(bioneuron.v_record))
 	ax1.set(xlabel='time', ylabel='bioneuron voltage (mV)')
 	ax2.plot(timesteps,raw_signal,label='input signal')
-	for n in range(P['n_LIF']):
+	for n in range(P['n_lif']):
 		ax2.plot(timesteps,np.array(lif_spikes)[:,n]*P['dt'],label='input spikes [%s]'%n)
 	ax2.plot(timesteps,biospikes*P['dt'],label='output spikes')
 	ax2.set(xlabel='time (s)')
@@ -113,14 +113,14 @@ def plot_tuning_curve(X,f_bio_rate,f_lif_rate,loss,run_id):
 	sns.set(context='poster')
 	figure, ax1 = plt.subplots(1,1)
 	ax1.plot(X,f_bio_rate(X),label='bioneuron firing rate (Hz)')
-	ax1.plot(X,f_lif_rate(X),label='LIF firing rate (Hz)')
+	ax1.plot(X,f_lif_rate(X),label='lif firing rate (Hz)')
 	ax1.set(xlabel='x',ylabel='firing rate (Hz)',title='loss=%0.3f' %loss)
 	plt.legend()
 	figure.savefig(run_id+'_tuning_curve.png')
 	plt.close(figure)
 
 
-def plot_loss(trials,hyp_params):
+def plot_loss(P,trials):
 	import matplotlib.pyplot as plt
 	import seaborn as sns
 	sns.set(context='poster')
@@ -129,13 +129,13 @@ def plot_loss(trials,hyp_params):
 	Y=[t['result']['loss'] for t in trials]
 	ax1.scatter(X,Y)
 	ax1.set(xlabel='$t$',ylabel='loss')
-	figure1.savefig(hyp_params['directory']+'hyperopt_result.png')
+	figure1.savefig(P['directory']+'hyperopt_result.png')
 
 
-def export_params(P,hyp_params,run_id):
+def export_params(P,run_id):
 	import pandas as pd
 	import json
-	my_params=pd.DataFrame([hyp_params])
+	my_params=pd.DataFrame([P])
 	my_params.reset_index().to_json(run_id+'_params.json',orient='records')
 
 def isi_hold_function(t, spike_times, midpoint=False, interp='zero'):
@@ -150,7 +150,6 @@ def isi_hold_function(t, spike_times, midpoint=False, interp='zero'):
 	    the points are placed at the beginning of ISIs
 	"""
 	isis = np.diff(spike_times)
-	print isis
 	if midpoint:
 		rt = np.zeros(len(isis)+2)
 		rt[0] = t[0]

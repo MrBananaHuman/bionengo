@@ -12,8 +12,8 @@ def main():
 	import json
 	import nengo
 	import pandas as pd
-	from initialize import ch_dir, make_addon, make_bioneuron
-	from run import run_neuron
+	from initialize import ch_dir, make_addon
+	from neuron_methods import run_bioneuron, make_bioneuron
 	import matplotlib.pyplot as plt
 	import seaborn as sns
 
@@ -21,9 +21,9 @@ def main():
 	P['timesteps']=np.arange(0,P['t_sample'],P['dt'])
 	datadir=ch_dir()
 	P['directory']=datadir
-	rates_in=np.arange(20,300,10)
+	rates_in=np.arange(20,200,10)
 	rates_out=np.zeros_like(rates_in)
-	w_naughts=np.logspace(-3,0,num=7)
+	w_naughts=np.logspace(-2,-1,num=5)
 	addon=make_addon(6)
 	P['n_LIF']=1
 
@@ -55,9 +55,9 @@ def main():
 			n_syn=P['synapses_per_connection']
 			weights=np.ones((P['n_LIF'],n_syn))*w0
 			locations=np.ones((P['n_LIF'],n_syn))*0.5 #synapses onto where spikes are recorded on soma
-			bias=0
+			bias=-1.0
 			bioneuron = make_bioneuron(P,weights,locations,bias)
-			run_neuron(P,LIFdata,bioneuron)
+			run_bioneuron(P,LIFdata,bioneuron)
 
 			timesteps=P['timesteps']
 			spike_times=np.round(np.array(bioneuron.spikes),decimals=3)

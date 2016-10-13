@@ -49,23 +49,23 @@ def make_signal(P):
 	assert raw_signal is not None, "signal type not specified"
 	return raw_signal
 
-def make_spikes_in(P,raw_signal,datadir):
+def make_spikes_in(P,raw_signal):
 	import nengo
 	import numpy as np
 	import pandas as pd
 	import json
 	spikes_in=[]
-	LIFdata={}
+	lifdata={}
 	while np.sum(spikes_in)==0: #rerun nengo spike generator until it returns something
 		with nengo.Network() as model:
 			signal = nengo.Node(
 					output=lambda t: raw_signal[int(t/P['dt'])])
 			ideal = nengo.Ensemble(1,
 					dimensions=1,
-					max_rates=nengo.dists.Uniform(P['min_LIF_rate'],P['max_LIF_rate']))
-			ens_in = nengo.Ensemble(P['n_LIF'],
+					max_rates=nengo.dists.Uniform(150,200)) #ideal tuning curve has limited rate
+			ens_in = nengo.Ensemble(P['n_lif'],
 					dimensions=1,
-					max_rates=nengo.dists.Uniform(P['min_LIF_rate'],P['max_LIF_rate']))		
+					max_rates=nengo.dists.Uniform(P['min_lif_rate'],P['max_lif_rate']))		
 			nengo.Connection(signal,ens_in)
 			probe_signal = nengo.Probe(signal)
 			probe_in = nengo.Probe(ens_in.neurons,'spikes')
@@ -74,19 +74,18 @@ def make_spikes_in(P,raw_signal,datadir):
 			eval_points, activities = nengo.utils.ensemble.tuning_curves(ideal,sim)
 		signal_in=sim.data[probe_signal]
 		spikes_in=sim.data[probe_in]
-	LIFdata['signal_in']=signal_in.ravel()
-	LIFdata['spikes_in']=spikes_in
-	LIFdata['lif_eval_points']=eval_points.ravel()
-	LIFdata['lif_activities']=activities.ravel()
-	out_data=pd.DataFrame([LIFdata])
-	out_data.reset_index().to_json(datadir+'LIFdata.json',orient='records')
-	return LIFdata
+	lifdata['signal_in']=signal_in.ravel()
+	lifdata['spikes_in']=spikes_in
+	lifdata['lif_eval_points']=eval_points.ravel()
+	lifdata['lif_activities']=activities.ravel()
+	out_data=pd.DataFrame([lifdata])
+	out_data.reset_index().to_json(P['directory']+'lifdata.json',orient='records')
+	return lifdata
 
-def find_w_max(P,LIFdata):
+def find_w_max(P,lifdata):
 	import numpy as np
 	from analyze import get_rates
-	summed_rates=get_rates(P,LIFdata['spikes_in'])
+	spike_train, summed_rates=get_rates(P,lifdata['spikes_in'])
 	rate_max=np.amax(summed_rates)
-	w_max=175.0/rate_max*0.01*200 #175 hz input from 0.01 max weight in response curve
-	print summed_rates,w_max
+	w_max=175.0/rate_max*0.01 #175 hz input from 0.01 max weight in response curve
 	return w_max
