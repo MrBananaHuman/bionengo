@@ -132,11 +132,11 @@ def plot_loss(P,trials):
 	figure1.savefig(P['directory']+'hyperopt_result.png')
 
 
-def export_params(P,run_id):
+def export_params(P,run_id,loss):
 	import pandas as pd
 	import json
 	my_params=pd.DataFrame([P])
-	my_params.reset_index().to_json(run_id+'_params.json',orient='records')
+	my_params.reset_index().to_json(run_id+'_loss_%s_params.json'%loss,orient='records')
 
 def isi_hold_function(t, spike_times, midpoint=False, interp='zero'):
 	import numpy as np

@@ -38,10 +38,12 @@ def simulate(P):
 	spike_times=np.round(np.array(bioneuron.spikes),decimals=3)
 	biospikes, biorates=get_rates(P,spike_times)
 	bio_eval_points, bio_activities = make_tuning_curves(P,lifdata,biorates)
-	plot_rates(P,bioneuron,biospikes,biorates,lifdata['signal_in'],lifdata['spikes_in'],run_id)
 	X,f_bio_rate,f_lif_rate,loss=tuning_curve_loss(P,lifdata['lif_eval_points'],lifdata['lif_activities'],bio_eval_points,bio_activities)
+
+	os.chdir(P['directory'])
+	plot_rates(P,bioneuron,biospikes,biorates,lifdata['signal_in'],lifdata['spikes_in'],run_id)
 	plot_tuning_curve(X,f_bio_rate,f_lif_rate,loss,run_id)
-	export_params(P,run_id)
+	export_params(P,run_id,loss)
 	stop=timeit.default_timer()
 	print ' Neuron Runtime - %s sec' %(stop-start)
 	return {'loss': loss, 'status': hyperopt.STATUS_OK}
@@ -91,7 +93,7 @@ def main():
 		TAB N: hyperopt-mongo-worker --mongo=localhost:1234/foo_db --poll-interval=0.1
 		'''
 		from hyperopt.mongoexp import MongoTrials
-		trials=MongoTrials('mongo://localhost:1234/foo_db/jobs', exp_key='exp1')
+		trials=MongoTrials('mongo://localhost:1234/foo_db/jobs', exp_key='exp11')
 		best=hyperopt.fmin(simulate,space=P,algo=hyperopt.tpe.suggest,max_evals=P['max_evals'],trials=trials)
 		plot_loss(P,trials)
 
