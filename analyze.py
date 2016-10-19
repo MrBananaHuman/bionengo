@@ -84,25 +84,25 @@ def plot_rates(P,bioneuron,biospikes,biorates,raw_signal,lif_spikes,run_id):
 	import seaborn as sns
 	import pandas as pd
 	import ipdb
+	from nengo.utils.matplotlib import rasterplot
 
 	timesteps=np.arange(0,P['t_sample'],P['dt'])
 	sns.set(context='poster')
-	figure, (ax1,ax2,ax3) = plt.subplots(3,1)
-	ax1.plot(np.array(bioneuron.t_record)/1000, np.array(bioneuron.v_record))
-	ax1.set(xlabel='time', ylabel='bioneuron voltage (mV)')
-	ax2.plot(timesteps,raw_signal,label='input signal')
-	for n in range(P['n_lif']):
-		ax2.plot(timesteps,np.array(lif_spikes)[:,n]*P['dt'],label='input spikes [%s]'%n)
-	ax2.plot(timesteps,biospikes*P['dt'],label='output spikes')
-	ax2.set(xlabel='time (s)')
-	ax3.plot(timesteps,biorates,label='output rate')
-	ax3.set(xlabel='time (s)',ylabel='bioneuron Hz')
+	figure, (ax1,ax2,ax3,ax4) = plt.subplots(4,1)
+	ax1.plot(timesteps,raw_signal,label='input signal')
+	ax1.set(xlabel='time (s)',ylabel='input signal')
+	ax2.set(xlabel='time', ylabel='LIF spikes')
+	rasterplot(timesteps, np.array(lif_spikes),ax=ax2,use_eventplot=True)
+	ax3.plot(np.array(bioneuron.t_record)/1000, np.array(bioneuron.v_record))
+	ax3.set(xlabel='time', ylabel='bioneuron mV')
+	ax4.plot(timesteps,biorates,label='output rate')
+	ax4.set(xlabel='time (s)',ylabel='bioneuron Hz')
 	plt.legend()
-	figure.savefig(run_id+'_spikes.png')
+	figure.savefig('loss=%0.3f_'%P['loss']+run_id+'_spikes.png')
 	plt.close(figure)
 
 
-def plot_tuning_curve(X,f_bio_rate,f_lif_rate,loss,run_id):
+def plot_tuning_curve(P,X,f_bio_rate,f_lif_rate,loss,run_id):
 	import numpy as np
 	import matplotlib.pyplot as plt
 	import seaborn as sns
@@ -114,9 +114,9 @@ def plot_tuning_curve(X,f_bio_rate,f_lif_rate,loss,run_id):
 	figure, ax1 = plt.subplots(1,1)
 	ax1.plot(X,f_bio_rate(X),label='bioneuron firing rate (Hz)')
 	ax1.plot(X,f_lif_rate(X),label='lif firing rate (Hz)')
-	ax1.set(xlabel='x',ylabel='firing rate (Hz)',title='loss=%0.3f' %loss)
+	ax1.set(xlabel='x',ylabel='firing rate (Hz)',title='loss=%0.3f' %P['loss'])
 	plt.legend()
-	figure.savefig(run_id+'_tuning_curve.png')
+	figure.savefig('loss=%0.3f_'%P['loss']+run_id+'_tuning_curve.png')
 	plt.close(figure)
 
 
@@ -136,32 +136,36 @@ def export_params(P,run_id,loss):
 	import pandas as pd
 	import json
 	my_params=pd.DataFrame([P])
-	my_params.reset_index().to_json(run_id+'_loss_%s_params.json'%loss,orient='records')
+	my_params.reset_index().to_json('loss=%0.3f_'%P['loss']+run_id+'_params.json',orient='records')
 
-def isi_hold_function(t, spike_times, midpoint=False, interp='zero'):
+def make_dataframe(P,run_id,weights,locations,bias,loss):
 	import numpy as np
-	import scipy as sp
-	"""
-	Eric Hunsberger 2016 Tech Report
-	Estimate firing rate using ISIs, with zero-order interpolation
-	t : the times at which raw spike data (spikes) is defined
-	spikes : the raw spike data
-	midpoint : place interpolation points at midpoint of ISIs. Otherwise,
-	    the points are placed at the beginning of ISIs
-	"""
-	isis = np.diff(spike_times)
-	if midpoint:
-		rt = np.zeros(len(isis)+2)
-		rt[0] = t[0]
-		rt[1:-1] = 0.5*(spike_times[0:-1] + spike_times[1:])
-		rt[-1] = t[-1]
-		r = np.zeros_like(rt)
-		r[1:-1] = 1. / isis
-	else:
-		rt = np.zeros(len(spike_times)+2)
-		rt[0] = t[0]
-		rt[1:-1] = spike_times
-		rt[-1] = t[-1]
-		r = np.zeros_like(rt)
-		r[1:-2] = 1. / isis
-	return sp.interpolate.interp1d(rt, r, kind=interp, copy=False)
+	import pandas as pd
+	columns=('run_id','weight','location','bias','loss')
+	df=pd.DataFrame(columns=columns,index=np.arange(0,P['n_lif']*P['n_syn']))
+	for n in range(P['n_lif']):
+		for i in range(P['n_syn']):
+			df.loc[n*P['n_syn']+i]=[run_id,weights[n][i],locations[n][i],bias,loss]
+	return df
+
+def analyze_df(P,trials):
+	import pandas as pd
+	df=pd.concat([pd.DataFrame.from_csv(t['result']['run_id']+'_dataframe') \
+		for t in trials],ignore_index=True)
+	df.to_pickle(P['directory']+'dataframe.pkl')
+	plot_weight_dist(P,df)
+	return df
+
+def plot_weight_dist(P,df):
+	import numpy as np
+	import matplotlib.pyplot as plt
+	import seaborn as sns
+	import ipdb
+	losses=np.sort(np.unique(df['loss']))
+	cutoff=losses[np.ceil(P['loss_cutoff']*len(losses))-1] #top X% of losses
+	weights=df.query("loss<=@cutoff")['weight']
+	sns.set(context='poster')
+	figure1, ax1 = plt.subplots(1, 1)
+	sns.distplot(weights,kde=True,ax=ax1)
+	ax1.set(title='location=soma, losses<=%s, N=%s'%(cutoff,len(weights)))
+	figure1.savefig(P['directory']+'_weight_distribution.png')

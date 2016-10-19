@@ -1,3 +1,7 @@
+#if building new NEURON mechanisms (channel, synapse)
+	#>>> cd folder_with_file.mod
+	#>>> /usr/local/x86_64/bin/nrnivmodl
+	
 def make_bioneuron(P,weights,locations,bias):
 	import numpy as np
 	from neurons import Bahl
