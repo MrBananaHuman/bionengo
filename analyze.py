@@ -167,5 +167,6 @@ def plot_weight_dist(P,df):
 	sns.set(context='poster')
 	figure1, ax1 = plt.subplots(1, 1)
 	sns.distplot(weights,kde=True,ax=ax1)
-	ax1.set(title='location=soma, losses<=%s, N=%s'%(cutoff,len(weights)))
+	ax1.set(title='location=%s (%s), w_0=%s, losses<=%s, N=%s'
+							%(P['l_0'],P['synapse_dist'],P['w_0'],cutoff,len(weights)))
 	figure1.savefig(P['directory']+'_weight_distribution.png')

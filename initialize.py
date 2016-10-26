@@ -87,10 +87,10 @@ def find_w_max(P,lifdata):
 	from analyze import get_rates
 	spike_train, summed_rates=get_rates(P,lifdata['spikes_in'])
 	rate_max=np.amax(summed_rates)
-	w_max=175.0/rate_max*0.01 #175 hz input from 0.01 max weight in response curve
+	w_max=P['r_0']/rate_max*P['w_0']
 	return w_max
 
-def add_search_space(P,w_max):
+def add_search_space(P,w_max,l_min,l_max):
 	#adds a hyperopt-distributed weight, location, bias for each synapse
 	import numpy as np
 	import hyperopt
@@ -100,8 +100,10 @@ def add_search_space(P,w_max):
 	for n in range(P['n_lif']):
 		for i in range(P['n_syn']): 
 			P['weights']['%s_%s'%(n,i)]=hyperopt.hp.uniform('w_%s_%s'%(n,i),-1.0*w_max,1.0*w_max)
-			if P['synapse_dist'] == 'optimized': 
-				P['locations']['%s_%s'%(n,i)]=hyperopt.hp.uniform('l_%s_%s'%(n,i),0,1)	
-			elif P['synapse_dist'] == 'soma': 
+			if P['synapse_dist'] == 'soma': 
 				P['locations']['%s_%s'%(n,i)]=0.5
+			elif P['synapse_dist'] == 'apical': 
+				P['locations']['%s_%s'%(n,i)] = P['l_0']
+				# else: P['locations']['%s_%s'%(n,i)]=hyperopt.hp.uniform('l_%s_%s'%(n,i),l_min,l_max)
+
 	return P
