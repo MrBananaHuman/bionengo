@@ -14,7 +14,7 @@ def simulate(P):
 	from initialize import make_addon
 	from analyze import get_rates, make_tuning_curves, tuning_curve_loss,\
 						plot_rates, plot_tuning_curve,export_params, make_dataframe
-	from neuron_methods import make_bioneuron, run_bioneuron
+	from neuron_methods import make_bioneuron, run_bioneuron, connect_bioneuron
 	import timeit
 
 	start=timeit.default_timer()
@@ -27,14 +27,16 @@ def simulate(P):
 	weights=np.zeros((P['n_lif'],P['n_syn']))
 	locations=np.zeros((P['n_lif'],P['n_syn']))
 	bias=P['bias']
+	# ipdb.set_trace()
 	for n in range(P['n_lif']):
 		for i in range(P['n_syn']):
 			weights[n][i]=P['weights']['%s_%s'%(n,i)]
 			locations[n][i]=P['locations']['%s_%s'%(n,i)]
 	bioneuron = make_bioneuron(P,weights,locations,bias)
+	connect_bioneuron(P,lifdata,bioneuron)
 
 	print '\nRunning NEURON'
-	run_bioneuron(P,lifdata,bioneuron)
+	run_bioneuron(P,bioneuron)
 	spike_times=np.round(np.array(bioneuron.spikes),decimals=3)
 	biospikes, biorates=get_rates(P,spike_times)
 	bio_eval_points, bio_activities = make_tuning_curves(P,lifdata,biorates)
@@ -65,8 +67,8 @@ def main():
 	print 'Generating input spikes ...'
 	raw_signal=make_signal(P)
 	lifdata=make_spikes_in(P,raw_signal)
-	# w_max=find_w_max(P,lifdata)
 	P=add_search_space(P)
+	# simulate(P)
 
 	trials=run_hyperopt(P)
 

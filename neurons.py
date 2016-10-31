@@ -9,7 +9,9 @@ class Bahl():
     def __init__(self):
         neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc')
         self.cell = neuron.h.Bahl()
-        self.connections = {} #index=input neuron, value=synapses
+        self.synapses = {} #index=input neuron, value=synapses
+        self.vecstim = {} #index=input neuron, value=VecStim object (input spike times)
+        self.netcons = {} #index=input neuron, value=NetCon Object (connection b/w VecStim and Syn)
 
     def start_recording(self):
         self.v_record = neuron.h.Vector()
@@ -28,10 +30,12 @@ class Bahl():
         self.bias_current.amp = self.bias
 
     def add_connection(self,idx):
-        self.connections[idx]=[] #a list of each synapse in this connection 
+        self.synapses[idx]=[] #list of each synapse in this connection
+        self.vecstim[idx]={'vstim':[],'vtimes':[]} #list of input spike times from this neuron
+        self.netcons[idx]=[] #list of netcon objects between input vecstim and synapses for this nrn
 
     def add_synapse(self,idx,syn_type,section,weight,tau,tau2):
         if syn_type == 'ExpSyn':
-            self.connections[idx].append(ExpSyn(section,weight,tau))
+            self.synapses[idx].append(ExpSyn(section,weight,tau))
         elif syn_type == 'Exp2Syn':
-            self.connections[idx].append(Exp2Syn(section,weight,tau,tau2))
+            self.synapses[idx].append(Exp2Syn(section,weight,tau,tau2))

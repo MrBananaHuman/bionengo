@@ -1,5 +1,5 @@
 {
-	't_sample':0.25,
+	't_sample':1.0,
 	'dt':0.0001,
 	'signal':
 		{'type':'equalpower','max_freq':10.0,'mean':0.0,'std':1.0},
@@ -13,7 +13,7 @@
 	'min_lif_rate':40,
 	'max_lif_rate':60,
 
-	'n_lif':10, #255 +/- 13 according to Markram et al 2015
+	'n_lif':100, #255 +/- 13 according to Markram et al 2015
 	'n_syn':5, #5.5 +/- 1.1 according to Ramaswamy et al 2012
 	'synapse_dist':
 		'random',
@@ -32,7 +32,7 @@
 
 	'kernel': #for smoothing spikes to calculate rate for tuning curve
 		#{'type':'exp','tau':0.02},
-		{'type':'gauss','sigma':0.007,},
+		{'type':'gauss','sigma':0.01,},
 		#{'type':'alpha','tau':0.1},
 		#{'type':'isi_smooth','sigma':0.007}, #TODO
 	'dx':0.1,
@@ -41,8 +41,8 @@
 	'optimization':
 		#'hyperopt',
 		'mongodb',
-	'max_evals':4,
+	'max_evals':500,
 
 	'l_0':1.0,
-	'w_0':0.001,
+	'w_0':0.0001,
 }

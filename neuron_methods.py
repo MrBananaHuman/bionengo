@@ -23,22 +23,47 @@ def make_bioneuron(P,weights,locations,bias):
 	bioneuron.start_recording()
 	return bioneuron
 
-def run_bioneuron(P,LIFdata,bioneuron):
+def connect_bioneuron(P,LIFdata,bioneuron):
 	import numpy as np
 	import neuron
-	import sys
-	timesteps=np.arange(0,P['t_sample'],P['dt'])
-	neuron.h.dt = P['dt'] * 1000
+	import ipdb
+	for n in range(P['n_lif']):
+		#create spike time vectors and an artificial spiking cell that delivers them
+		vstim=neuron.h.VecStim()
+		bioneuron.vecstim[n]['vstim'].append(vstim)
+		spike_times_ms=list(1000*P['dt']*np.where(np.array(LIFdata['spikes_in'])[:,n])[0])
+		vtimes=neuron.h.Vector(spike_times_ms)
+		bioneuron.vecstim[n]['vtimes'].append(vtimes)
+		bioneuron.vecstim[n]['vstim'][-1].play(bioneuron.vecstim[n]['vtimes'][-1])
+		# ipdb.set_trace()
+		#connect the VecStim to each synapse
+		for syn in bioneuron.synapses[n]:
+			netcon=neuron.h.NetCon(bioneuron.vecstim[n]['vstim'][-1],syn.syn)
+			netcon.weight[0]=abs(syn.weight)
+			bioneuron.netcons[n].append(netcon)
+
+def run_bioneuron(P,bioneuron):
+	import neuron
+	neuron.h.dt = P['dt']*1000
 	neuron.init()
-	for t in timesteps: 
-		sys.stdout.write("\r%d%%" %(1+100*t/(P['t_sample'])))
-		sys.stdout.flush()
-		t_idx=np.rint(t/P['dt'])
-		t_neuron=t*1000
-		for n in range(P['n_lif']):
-			if np.any(np.where(np.array(LIFdata['spikes_in'])[:,n])[0] == t_idx):
-				for syn in bioneuron.connections[n]:
-					if syn.type=='ExpSyn': syn.conn.event(t_neuron)
-					elif syn.type=='Exp2Syn': syn.conn.event(t_neuron)
-					# elif syn.type=='AlphaSyn': syn.onset=t*1000 #TODO
-		neuron.run(t_neuron)
+	neuron.run(P['t_sample']*1000)
+
+# def run_bioneuron(P,LIFdata,bioneuron):
+# 	import numpy as np
+# 	import neuron
+# 	import sys
+# 	timesteps=np.arange(0,P['t_sample'],P['dt'])
+# 	neuron.h.dt = P['dt'] * 1000
+# 	neuron.init()
+# 	for t in timesteps: 
+# 		sys.stdout.write("\r%d%%" %(1+100*t/(P['t_sample'])))
+# 		sys.stdout.flush()
+# 		t_idx=np.rint(t/P['dt'])
+# 		t_neuron=t*1000
+# 		for n in range(P['n_lif']):
+# 			if np.any(np.where(np.array(LIFdata['spikes_in'])[:,n])[0] == t_idx):
+# 				for syn in bioneuron.connections[n]:
+# 					if syn.type=='ExpSyn': syn.conn.event(t_neuron)
+# 					elif syn.type=='Exp2Syn': syn.conn.event(t_neuron)
+# 					# elif syn.type=='AlphaSyn': syn.onset=t*1000 #TODO
+# 		neuron.run(t_neuron)
