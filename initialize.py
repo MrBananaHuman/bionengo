@@ -60,7 +60,7 @@ def make_spikes_in(P,raw_signal):
 		with nengo.Network() as model:
 			signal = nengo.Node(
 					output=lambda t: raw_signal[int(t/P['dt'])])
-			ideal = nengo.Ensemble(1,
+			ideal = nengo.Ensemble(P['n_bio'],
 					dimensions=1, #ideal tuning curve has limited rate
 					max_rates=nengo.dists.Uniform(P['min_lif_rate'],P['max_lif_rate']))
 			ens_in = nengo.Ensemble(P['n_lif'],
@@ -76,18 +76,10 @@ def make_spikes_in(P,raw_signal):
 	lifdata['signal_in']=signal_in.ravel()
 	lifdata['spikes_in']=spikes_in
 	lifdata['lif_eval_points']=eval_points.ravel()
-	lifdata['lif_activities']=activities.ravel()
+	lifdata['lif_activities']=activities
 	out_data=pd.DataFrame([lifdata])
 	out_data.reset_index().to_json(P['directory']+'lifdata.json',orient='records')
 	return lifdata
-
-def find_w_max(P,lifdata):
-	import numpy as np
-	from analyze import get_rates
-	spike_train, summed_rates=get_rates(P,lifdata['spikes_in'])
-	rate_max=np.amax(summed_rates)
-	w_max=P['r_0']/rate_max*P['w_0']
-	return w_max
 
 def weight_rescale(location):
 	#interpolation
@@ -104,23 +96,24 @@ def add_search_space(P):
 	import numpy as np
 	import hyperopt
 	from initialize import weight_rescale
-	P['bias']=hyperopt.hp.uniform('b',P['bias_min'],P['bias_max'])
+	P['bias']={}
 	P['weights']={}
 	P['locations']={}
-	for n in range(P['n_lif']):
-		for i in range(P['n_syn']): 
-			if P['synapse_dist'] == 'soma': 
-				P['locations']['%s_%s'%(n,i)]=0.5
-			elif P['synapse_dist'] == 'apical': 
-				P['locations']['%s_%s'%(n,i)] = P['l_0']
-			elif P['synapse_dist'] == 'random':
-				P['locations']['%s_%s'%(n,i)] = np.round(np.random.uniform(0.0,1.0),decimals=2)
-			elif P['synapse_dist'] == 'optimized': #TODO - apply weight rescale to this
-				P['locations']['%s_%s'%(n,i)]=\
-					hyperopt.hp.quniform('l_%s_%s'%(n,i),0.0,1.0,1.0/P['n_seg'])
-			k_weight=weight_rescale(P['locations']['%s_%s'%(n,i)])
-			P['weights']['%s_%s'%(n,i)]=\
-				hyperopt.hp.uniform('w_%s_%s'%(n,i),-k_weight*P['w_0'],k_weight*P['w_0'])
+	for b in range(P['n_bio']):
+		P['bias']['%s'%b]=hyperopt.hp.uniform('%s'%b,P['bias_min'],P['bias_max'])
+		for n in range(P['n_lif']):
+			for i in range(P['n_syn']): 
+				if P['synapse_dist'] == 'soma': 
+					P['locations']['%s_%s_%s'%(b,n,i)]=0.5
+				elif P['synapse_dist'] == 'apical': 
+					P['locations']['%s_%s_%s'%(b,n,i)] = P['l_0']
+				elif P['synapse_dist'] == 'random':
+					P['locations']['%s_%s_%s'%(b,n,i)] = \
+						np.round(np.random.uniform(0.0,1.0),decimals=2)
+				elif P['synapse_dist'] == 'optimized': #TODO - apply weight rescale to this
+					P['locations']['%s_%s_%s'%(b,n,i)]=\
+						hyperopt.hp.quniform('l_%s_%s'%(n,i),0.0,1.0,1.0/P['n_seg'])
+				k_weight=weight_rescale(P['locations']['%s_%s_%s'%(b,n,i)])
+				P['weights']['%s_%s_%s'%(b,n,i)]=\
+					hyperopt.hp.uniform('w_%s_%s_%s'%(b,n,i),-k_weight*P['w_0'],k_weight*P['w_0'])
 	return P
-
-

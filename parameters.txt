@@ -13,6 +13,7 @@
 	'min_lif_rate':40,
 	'max_lif_rate':60,
 
+	'n_bio':5,
 	'n_lif':100, #255 +/- 13 according to Markram et al 2015
 	'n_syn':5, #5.5 +/- 1.1 according to Ramaswamy et al 2012
 	'synapse_dist':
@@ -41,7 +42,7 @@
 	'optimization':
 		#'hyperopt',
 		'mongodb',
-	'max_evals':500,
+	'max_evals':6000,
 
 	'l_0':1.0,
 	'w_0':0.0001,

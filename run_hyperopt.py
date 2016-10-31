@@ -2,7 +2,6 @@ def run_hyperopt(P):
 	import hyperopt
 	from model import simulate
 	import numpy as np
-	from analyze import plot_loss
 
 	if P['optimization']=='hyperopt':
 		trials=hyperopt.Trials()
@@ -21,6 +20,5 @@ def run_hyperopt(P):
 		trials=MongoTrials('mongo://localhost:1234/foo_db/jobs', exp_key=str(np.random.randint(1e9)))
 		best=hyperopt.fmin(simulate,space=P,algo=hyperopt.tpe.suggest,max_evals=P['max_evals'],trials=trials)
 	
-	plot_loss(P,trials)
 
-	return trials
+	return trials,best

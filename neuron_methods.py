@@ -42,7 +42,7 @@ def connect_bioneuron(P,LIFdata,bioneuron):
 			netcon.weight[0]=abs(syn.weight)
 			bioneuron.netcons[n].append(netcon)
 
-def run_bioneuron(P,bioneuron):
+def run_bioneuron(P):
 	import neuron
 	neuron.h.dt = P['dt']*1000
 	neuron.init()
