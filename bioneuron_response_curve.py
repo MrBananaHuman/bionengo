@@ -4,29 +4,15 @@ September 2016
 bionengo - interface NEURON and Bahr2 neurons with nengo
 '''
 
-def weight_rescale(location,k):
+def weight_rescale(location):
 	#interpolation
 	import numpy as np
 	from scipy.interpolate import interp1d
 	#load voltage attenuation data for bahl.hoc
 	voltage_attenuation=np.load('/home/pduggins/bionengo/'+'voltage_attenuation.npz')
 	f_voltage_att = interp1d(voltage_attenuation['distances'],voltage_attenuation['voltages'])
-	# scaled_weight=1.0/f_voltage_att(location)
 	scaled_weight=1.0/f_voltage_att(location)
-	scaled_weight=scaled_weight*k
 	return scaled_weight
-
-
-	#hardcoded for nseg=5 in bahl.hoc
-	# scaled_weight=1.0
-	# if location == 0.0: scaled_weight/=1.0
-	# elif 0.0 < location < 0.2: scaled_weight/=0.94
-	# elif 0.2 <= location < 0.4: scaled_weight/=0.82
-	# elif 0.4 <= location < 0.6: scaled_weight/=0.72
-	# elif 0.6 <= location < 0.8: scaled_weight/=0.64
-	# elif 0.8 <= location < 1.0: scaled_weight/=0.57
-	# elif location == 1.0: scaled_weight/=0.54
-	# return scaled_weight
 
 def simulate(exp_params):
 	import numpy as np
@@ -44,7 +30,7 @@ def simulate(exp_params):
 	P=exp_params[4]
 
 	for i in range(len(rates_in)):
-		print '\nl0=%s, w0=%s, k=%s, hz=%s' %(l0,w0,P['weight_scaling'],rates_in[i])
+		print '\nl0=%s, w0=%s, hz=%s' %(l0,w0,rates_in[i])
 		hz=rates_in[i]
 		P['min_lif_rate']=hz
 		P['max_LIF_rate']=hz
@@ -53,7 +39,7 @@ def simulate(exp_params):
 			signal = nengo.Node(output=1.0)
 			ens_in = nengo.Ensemble(P['n_lif'],
 					dimensions=1,
-					encoders=[[1]],
+					encoders=[[1]]*P['n_lif'],
 					max_rates=nengo.dists.Uniform(hz,hz))
 			nengo.Connection(signal,ens_in)
 			probe_signal = nengo.Probe(signal)
@@ -69,7 +55,7 @@ def simulate(exp_params):
 		print 'Running NEURON...'
 		weights=np.ones((P['n_lif'],P['n_syn']))*w0
 		if P['weight_attenuation']==True:
-			weights*=weight_rescale(l0,P['weight_scaling'])
+			weights*=weight_rescale(l0)
 		locations=np.ones((P['n_lif'],P['n_syn']))*l0
 		bias=0.0
 		bioneuron = make_bioneuron(P,weights,locations,bias)
@@ -93,7 +79,7 @@ def simulate(exp_params):
 		ax3.plot(timesteps,rates,label='output rate')
 		ax3.set(xlabel='time (s)')
 		plt.legend()
-		newaddon=P['directory']+'hz'+str(hz)+'w'+str(w0)+'l'+str(l0)+'k'+str(P['weight_scaling'])
+		newaddon=P['directory']+'hz'+str(hz)+'w'+str(w0)+'l'+str(l0)
 		figure.savefig(newaddon+'_spikes.png')
 		plt.close(figure)
 		
@@ -103,10 +89,10 @@ def simulate(exp_params):
 
 	sns.set(context='poster')
 	figure, ax1 = plt.subplots(1,1)
-	ax1.plot(rates_in*P['n_syn'],rates_out)
-	ax1.set(xlabel='LIF firing rate (scaled to n_syn)', ylabel='bioneuron firing rate',
-			title='weight_attenuation=%s'%P['weight_attenuation'])
-	figure.savefig(P['directory']+'w=%s,l=%03d,k=%s'%(w0,l0*100,P['weight_scaling'])+'response_curve.png')
+	ax1.plot(rates_in,rates_out)
+	ax1.set(xlabel='LIF firing rate per input neuron', ylabel='bioneuron firing rate',ylim=(0,60),
+			title='n_lif=%s, n_syn=%s, w0=%s'%(P['n_lif'],P['n_syn'],w0))
+	figure.savefig(P['directory']+'response_curve_l0=%03d.png'%(l0*100))
 	plt.close(figure)
 	return
 
@@ -124,12 +110,9 @@ def main():
 	# w_naughts=np.logspace(-3,-1,num=10)
 	# l_naughts=[0.0]
 	l_naughts=np.linspace(0.0,1.0,num=4)
-	scaling_factors=[1.0]
-	# scaling_factors=np.arange(10.0,50.0,10.0)
-	P['n_lif']=1
-	P['n_syn']=50
+	P['n_lif']=10
+	P['n_syn']=5
 	P['weight_attenuation']=True
-	P['weight_scaling']=1.0
 	n_processes=8
 
 
@@ -137,9 +120,8 @@ def main():
 	exp_params=[]
 	for l0 in l_naughts:
 		for w0 in w_naughts:
-			for k in scaling_factors:
-				exp_params.append([l0, w0, rates_in, rates_out, P])
-				# simulate([l0, w0, rates_in, rates_out, P])
+			exp_params.append([l0, w0, rates_in, rates_out, P])
+			# simulate([l0, w0, rates_in, rates_out, P])
 	pool.map(simulate, exp_params)
 
 if __name__=='__main__':

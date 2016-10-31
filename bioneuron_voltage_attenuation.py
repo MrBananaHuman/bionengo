@@ -11,8 +11,6 @@ def weight_rescale(location,k):
 	voltage_attenuation=np.load('/home/pduggins/bionengo/'+'voltage_attenuation.npz')
 	f_voltage_att = interp1d(voltage_attenuation['distances'],voltage_attenuation['voltages'])
 	# scaled_weight=1.0/f_voltage_att(location)
-	scaled_weight=1.0/f_voltage_att(location)
-	scaled_weight=scaled_weight*k
 	return scaled_weight
 
 	# #for nseg=5 in bahl.hoc
@@ -58,6 +56,7 @@ def simulate(exp_params):
 	ax.plot(bioneuron.t_record, bioneuron.v_record)
 	ax.set(ylim=(-75,0))
 	figure.savefig(P['directory']+'voltage_l0=%03d,w0=%06d.png'%(l0*100,w0*1e6))
+	plt.close(figure)
 
 	del bioneuron
 	return [l0,w0,dv]
@@ -74,12 +73,12 @@ def main():
 	P['timesteps']=np.arange(0,P['t_sample'],P['dt'])
 	P['directory']=ch_dir()
 	P['t_sample']=0.4
-	# w_naughts=[0.01]
-	w_naughts=np.linspace(0.0001,0.0002,num=50)
-	l_naughts=[0.0]
-	# l_naughts=np.linspace(0.0,1.0,num=5)
+	w_naughts=[0.0001]
+	# w_naughts=np.linspace(0.0001,0.0002,num=50)
+	# l_naughts=[0.0]
+	l_naughts=np.linspace(0.0,1.0,num=100)
 	P['n_lif']=1
-	P['n_syn']=100
+	P['n_syn']=50
 	P['k']=1.0
 	n_processes=10
 

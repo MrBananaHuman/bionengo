@@ -13,8 +13,8 @@ def make_bioneuron(P,weights,locations,bias):
 		for i in range(P['n_syn']):
 			syn_type=P['synapse_type']
 			if P['synapse_dist'] == 'soma': section=bioneuron.cell.soma(locations[n][i])
-			elif P['synapse_dist'] == 'apical': section=bioneuron.cell.apical(locations[n][i])
 			elif P['synapse_dist'] == 'tuft': section=bioneuron.cell.tuft(locations[n][i])
+			else: section=bioneuron.cell.apical(locations[n][i])
 			weight=weights[n][i]
 			tau=P['synapse_tau']
 			tau2=P['synapse_tau2']

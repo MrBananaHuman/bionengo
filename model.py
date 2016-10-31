@@ -65,8 +65,8 @@ def main():
 	print 'Generating input spikes ...'
 	raw_signal=make_signal(P)
 	lifdata=make_spikes_in(P,raw_signal)
-	w_max=find_w_max(P,lifdata)
-	P=add_search_space(P,w_max)
+	# w_max=find_w_max(P,lifdata)
+	P=add_search_space(P)
 
 	trials=run_hyperopt(P)
 

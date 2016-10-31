@@ -61,11 +61,10 @@ def make_spikes_in(P,raw_signal):
 			signal = nengo.Node(
 					output=lambda t: raw_signal[int(t/P['dt'])])
 			ideal = nengo.Ensemble(1,
-					dimensions=1,
-					max_rates=nengo.dists.Uniform(80,120)) #ideal tuning curve has limited rate
+					dimensions=1, #ideal tuning curve has limited rate
+					max_rates=nengo.dists.Uniform(P['min_lif_rate'],P['max_lif_rate']))
 			ens_in = nengo.Ensemble(P['n_lif'],
-					dimensions=1,
-					max_rates=nengo.dists.Uniform(P['min_lif_rate'],P['max_lif_rate']))		
+					dimensions=1)		
 			nengo.Connection(signal,ens_in)
 			probe_signal = nengo.Probe(signal)
 			probe_in = nengo.Probe(ens_in.neurons,'spikes')
@@ -90,20 +89,38 @@ def find_w_max(P,lifdata):
 	w_max=P['r_0']/rate_max*P['w_0']
 	return w_max
 
-def add_search_space(P,w_max,l_min,l_max):
+def weight_rescale(location):
+	#interpolation
+	import numpy as np
+	from scipy.interpolate import interp1d
+	#load voltage attenuation data for bahl.hoc
+	voltage_attenuation=np.load('/home/pduggins/bionengo/'+'voltage_attenuation.npz')
+	f_voltage_att = interp1d(voltage_attenuation['distances'],voltage_attenuation['voltages'])
+	scaled_weight=1.0/f_voltage_att(location)
+	return scaled_weight
+
+def add_search_space(P):
 	#adds a hyperopt-distributed weight, location, bias for each synapse
 	import numpy as np
 	import hyperopt
+	from initialize import weight_rescale
 	P['bias']=hyperopt.hp.uniform('b',P['bias_min'],P['bias_max'])
 	P['weights']={}
 	P['locations']={}
 	for n in range(P['n_lif']):
 		for i in range(P['n_syn']): 
-			P['weights']['%s_%s'%(n,i)]=hyperopt.hp.uniform('w_%s_%s'%(n,i),-1.0*w_max,1.0*w_max)
 			if P['synapse_dist'] == 'soma': 
 				P['locations']['%s_%s'%(n,i)]=0.5
 			elif P['synapse_dist'] == 'apical': 
 				P['locations']['%s_%s'%(n,i)] = P['l_0']
-				# else: P['locations']['%s_%s'%(n,i)]=hyperopt.hp.uniform('l_%s_%s'%(n,i),l_min,l_max)
-
+			elif P['synapse_dist'] == 'random':
+				P['locations']['%s_%s'%(n,i)] = np.round(np.random.uniform(0.0,1.0),decimals=2)
+			elif P['synapse_dist'] == 'optimized': #TODO - apply weight rescale to this
+				P['locations']['%s_%s'%(n,i)]=\
+					hyperopt.hp.quniform('l_%s_%s'%(n,i),0.0,1.0,1.0/P['n_seg'])
+			k_weight=weight_rescale(P['locations']['%s_%s'%(n,i)])
+			P['weights']['%s_%s'%(n,i)]=\
+				hyperopt.hp.uniform('w_%s_%s'%(n,i),-k_weight*P['w_0'],k_weight*P['w_0'])
 	return P
+
+
