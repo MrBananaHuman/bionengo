@@ -55,13 +55,10 @@ def make_tuning_curves(P,signal_in,biorates):
 	Hz=np.zeros_like(X) #firing rate for each eval point
 	timesteps=np.arange(0,P['t_sample'],P['dt'])
 	for xi in range(len(X)-1):
-		ts=[] #find the time indices where the signal is between this and the next evalpoint
-		for ti in range(len(timesteps)):
-			if X[xi] < signal_in[ti] < X[xi+1]:
-				ts.append(ti)
-		if len(ts)>0:
-			#average the firing rate at each of these time indices
-			Hz[xi]=np.average([biorates[ti] for ti in ts])
+		ts_greater=np.where(X[xi] < signal_in)[0]
+		ts_smaller=np.where(signal_in < X[xi+1])[0]
+		ts=np.intersect1d(ts_greater,ts_smaller)
+		if ts.shape[0]>0: Hz[xi]=np.average(biorates[ts])
 	return X, Hz
 
 
@@ -135,100 +132,105 @@ def plot_loss(P,trials):
 	Y=[t['result']['loss'] for t in trials]
 	ax1.scatter(X,Y)
 	ax1.set(xlabel='$t$',ylabel='loss')
-	figure1.savefig(P['directory']+'hyperopt_result.png')
+	figure1.savefig(P['directory']+'bioneuron_%s_hyperopt_result.png'%P['bio_idx'])
 
-def export_biopop(P,run_id,all_spike_times,losses):
+def export_bioneuron(P,run_id,spike_times,loss):
 	import json
 	import numpy as np
 	import ipdb
-	to_export={}
-	for b in range(P['n_bio']):
-		bias=P['bias']['%s'%b]
-		weights=np.zeros((P['n_lif'],P['n_syn']))
-		locations=np.zeros((P['n_lif'],P['n_syn']))
-		for n in range(P['n_lif']):
-			for i in range(P['n_syn']):
-				weights[n][i]=P['weights']['%s_%s_%s'%(b,n,i)]
-				locations[n][i]=P['locations']['%s_%s_%s'%(b,n,i)]
-		to_export[b]={
-			'weights':weights.tolist(),
-			'locations': locations.tolist(),
-			'bias': bias,
-			'spike_times': all_spike_times[b].tolist(),
-			'loss': losses[b],
-			}
-	with open(run_id+'_biopop.json', 'w') as data_file:
-		json.dump(to_export, data_file)
-
-def make_dataframe(P,b,run_id,weights,locations,bias,spike_times,loss):
-	import numpy as np
-	import pandas as pd
-	columns=('b','run_id','weight','location','bias','loss')
-	df=pd.DataFrame(columns=columns,index=np.arange(0,P['n_lif']*P['n_syn']))
+	bias=P['bias']
+	weights=np.zeros((P['n_lif'],P['n_syn']))
+	locations=np.zeros((P['n_lif'],P['n_syn']))
 	for n in range(P['n_lif']):
 		for i in range(P['n_syn']):
-			df.loc[n*P['n_syn']+i]=[b,run_id,weights[n][i],locations[n][i],bias,spike_times,loss]
-	return df
+			weights[n][i]=P['weights']['%s_%s'%(n,i)]
+			locations[n][i]=P['locations']['%s_%s'%(n,i)]
+	to_export={
+		'bio_idx':P['bio_idx'],
+		'weights':weights.tolist(),
+		'locations': locations.tolist(),
+		'bias': bias,
+		'spike_times': spike_times.tolist(),
+		'loss': loss,
+		}
+	with open(run_id+'_bioneuron_%s.json'%P['bio_idx'], 'w') as data_file:
+		json.dump(to_export, data_file)
 
-def analyze_df(P,trials):
-	import pandas as pd
-	df=pd.concat([pd.DataFrame.from_csv(t['result']['run_id']+'_dataframe') \
-		for t in trials],ignore_index=True)
-	df.to_pickle(P['directory']+'dataframe.pkl')
-	plot_weight_dist(P,df)
-	return df
+# def make_dataframe(P,b,run_id,weights,locations,bias,spike_times,loss):
+# 	import numpy as np
+# 	import pandas as pd
+# 	columns=('b','run_id','weight','location','bias','loss')
+# 	df=pd.DataFrame(columns=columns,index=np.arange(0,P['n_lif']*P['n_syn']))
+# 	for n in range(P['n_lif']):
+# 		for i in range(P['n_syn']):
+# 			df.loc[n*P['n_syn']+i]=[b,run_id,weights[n][i],locations[n][i],bias,spike_times,loss]
+# 	return df
 
-def plot_weight_dist(P,df):
+# def analyze_df(P,trials):
+# 	import pandas as pd
+# 	df=pd.concat([pd.DataFrame.from_csv(t['result']['run_id']+'_dataframe') \
+# 		for t in trials],ignore_index=True)
+# 	df.to_pickle(P['directory']+'dataframe.pkl')
+# 	plot_weight_dist(P,df)
+# 	return df
+
+# def plot_weight_dist(P,df):
+# 	import numpy as np
+# 	import matplotlib.pyplot as plt
+# 	import seaborn as sns
+# 	import ipdb
+# 	losses=np.sort(np.unique(df['loss']))
+# 	cutoff=losses[np.ceil(P['loss_cutoff']*len(losses))-1] #top X% of losses
+# 	weights=df.query("loss<=@cutoff")['weight']
+# 	sns.set(context='poster')
+# 	figure1, ax1 = plt.subplots(1, 1)
+# 	sns.distplot(weights,kde=True,ax=ax1)
+# 	ax1.set(title='location=%s (%s), w_0=%s, losses<=%s, N=%s'
+# 							%(P['l_0'],P['synapse_dist'],P['w_0'],cutoff,len(weights)))
+# 	figure1.savefig(P['directory']+'_weight_distribution.png')
+
+def get_min_loss_filename(P,trials):
 	import numpy as np
-	import matplotlib.pyplot as plt
-	import seaborn as sns
-	import ipdb
-	losses=np.sort(np.unique(df['loss']))
-	cutoff=losses[np.ceil(P['loss_cutoff']*len(losses))-1] #top X% of losses
-	weights=df.query("loss<=@cutoff")['weight']
-	sns.set(context='poster')
-	figure1, ax1 = plt.subplots(1, 1)
-	sns.distplot(weights,kde=True,ax=ax1)
-	ax1.set(title='location=%s (%s), w_0=%s, losses<=%s, N=%s'
-							%(P['l_0'],P['synapse_dist'],P['w_0'],cutoff,len(weights)))
-	figure1.savefig(P['directory']+'_weight_distribution.png')
-
-def plot_biopop_tuning_curves(P,trials):
-	import numpy as np
-	import matplotlib.pyplot as plt
-	import seaborn as sns
 	import ipdb
 	import json
-	#get the run_id for the lowest loss trial
 	losses=[t['result']['loss'] for t in trials]
 	ids=[t['result']['run_id'] for t in trials]
 	idx=np.argmin(losses)
 	best_run_id=str(ids[idx])
-	best_dir=P['directory']+best_run_id+"_biopop.json"
+	filename=P['directory']+best_run_id+"_bioneuron_%s.json"%P['bio_idx']
+	return filename
+
+def plot_final_tuning_curves(P,filenames):
+	import numpy as np
+	import matplotlib.pyplot as plt
+	import seaborn as sns
+	import ipdb
+	import json
 
 	lifdata=np.load(P['directory']+'lifdata.npz')
 	signal_in=lifdata['signal_in']
 	spikes_in=lifdata['spikes_in']
 	lif_eval_points=lifdata['lif_eval_points'].ravel()
 	lif_activities=lifdata['lif_activities']
-	with open(best_dir,'r') as data_file: 
-		biopop=json.load(data_file)
+
+	biopop=[]
+	for filename in filenames:
+		with open(filename,'r') as data_file: 
+			bioneuron=json.load(data_file)
+		biopop.append(bioneuron)
 
 	losses=[]
 	sns.set(context='poster')
 	figure1, ax1 = plt.subplots(1, 1)
 	ax1.set(xlabel='x',ylabel='firing rate (Hz)')
-	for b in biopop.iterkeys():
-		biospikes, biorates=get_rates(P,np.array(biopop[str(b)]['spike_times']))
+	for bio_idx in range(P['n_bio']):
+		biospikes, biorates=get_rates(P,np.array(biopop[bio_idx]['spike_times']))
 		bio_eval_points, bio_activities = make_tuning_curves(P,signal_in,biorates)
 		X,f_bio_rate,f_lif_rate,loss=tuning_curve_loss(
-				P,lif_eval_points,lif_activities[:,int(str(b))],
+				P,lif_eval_points,lif_activities[:,bio_idx],
 				bio_eval_points,bio_activities)
-		ax1.plot(X,f_bio_rate(X),label='bioneuron[%s]' %str(b),
-					linestyle='-',color=str(1.0*int(b)/len(biopop)))
-		ax1.plot(X,f_lif_rate(X),label='lif[%s]' %str(b),
-					linestyle='--',color=str(1.0*int(b)/len(biopop)))
+		lifplot=ax1.plot(X,f_bio_rate(X),linestyle='-')
+		bioplot=ax1.plot(X,f_lif_rate(X),linestyle='--',color=lifplot[0].get_color())
 		losses.append(loss)
-	ax1.set(title='total loss = %s'%np.sum(losses))
-	plt.legend()
+	ax1.set(ylim=(0,60),title='total loss = %s'%np.sum(losses))
 	figure1.savefig('biopop_tuning_curves.png')		

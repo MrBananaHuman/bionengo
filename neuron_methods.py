@@ -47,23 +47,3 @@ def run_bioneuron(P):
 	neuron.h.dt = P['dt']*1000
 	neuron.init()
 	neuron.run(P['t_sample']*1000)
-
-# def run_bioneuron(P,LIFdata,bioneuron):
-# 	import numpy as np
-# 	import neuron
-# 	import sys
-# 	timesteps=np.arange(0,P['t_sample'],P['dt'])
-# 	neuron.h.dt = P['dt'] * 1000
-# 	neuron.init()
-# 	for t in timesteps: 
-# 		sys.stdout.write("\r%d%%" %(1+100*t/(P['t_sample'])))
-# 		sys.stdout.flush()
-# 		t_idx=np.rint(t/P['dt'])
-# 		t_neuron=t*1000
-# 		for n in range(P['n_lif']):
-# 			if np.any(np.where(np.array(LIFdata['spikes_in'])[:,n])[0] == t_idx):
-# 				for syn in bioneuron.connections[n]:
-# 					if syn.type=='ExpSyn': syn.conn.event(t_neuron)
-# 					elif syn.type=='Exp2Syn': syn.conn.event(t_neuron)
-# 					# elif syn.type=='AlphaSyn': syn.onset=t*1000 #TODO
-# 		neuron.run(t_neuron)

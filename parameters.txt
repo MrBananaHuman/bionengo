@@ -1,5 +1,5 @@
 {
-	't_sample':10.0,
+	't_sample':1.0,
 	'dt':0.0001,
 	'signal':
 		{'type':'equalpower','max_freq':10.0,'mean':0.0,'std':1.0},
@@ -13,9 +13,10 @@
 	'min_lif_rate':40,
 	'max_lif_rate':60,
 
-	'n_bio':3,
-	'n_lif':100, #255 +/- 13 according to Markram et al 2015
+	'n_bio':5,
+	'n_lif':25, #255 +/- 13 according to Markram et al 2015
 	'n_syn':5, #5.5 +/- 1.1 according to Ramaswamy et al 2012
+	'w_0':0.0005,
 	'synapse_dist':
 		'random',
 		#'optimized',
@@ -36,14 +37,10 @@
 		{'type':'gauss','sigma':0.01,},
 		#{'type':'alpha','tau':0.1},
 		#{'type':'isi_smooth','sigma':0.007}, #TODO
-	'dx':0.1,
+	'dx':0.05,
 	'loss_cutoff':0.1,
 
-	'optimization':
-		#'hyperopt',
-		'mongodb',
-	'max_evals':5000,
+	'max_evals':1000,
+	'n_processes':5,
 
-	'l_0':1.0,
-	'w_0':0.0001,
 }
