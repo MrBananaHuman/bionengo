@@ -23,7 +23,7 @@ def make_bioneuron(P,weights,locations,bias):
 	bioneuron.start_recording()
 	return bioneuron
 
-def connect_bioneuron(P,LIFdata,bioneuron):
+def connect_bioneuron(P,spikes_in,bioneuron): #slowest part of simulation
 	import numpy as np
 	import neuron
 	import ipdb
@@ -31,11 +31,11 @@ def connect_bioneuron(P,LIFdata,bioneuron):
 		#create spike time vectors and an artificial spiking cell that delivers them
 		vstim=neuron.h.VecStim()
 		bioneuron.vecstim[n]['vstim'].append(vstim)
-		spike_times_ms=list(1000*P['dt']*np.where(np.array(LIFdata['spikes_in'])[:,n])[0])
+		spike_times_ms=list(1000*P['dt']*np.nonzero(spikes_in[:,n])[0]) #timely
+		# spike_times_ms=list(1000*P['dt']*np.where(spikes_in[:,n])[0]) #timely
 		vtimes=neuron.h.Vector(spike_times_ms)
 		bioneuron.vecstim[n]['vtimes'].append(vtimes)
 		bioneuron.vecstim[n]['vstim'][-1].play(bioneuron.vecstim[n]['vtimes'][-1])
-		# ipdb.set_trace()
 		#connect the VecStim to each synapse
 		for syn in bioneuron.synapses[n]:
 			netcon=neuron.h.NetCon(bioneuron.vecstim[n]['vstim'][-1],syn.syn)

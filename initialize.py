@@ -53,7 +53,7 @@ def make_spikes_in(P,raw_signal):
 	import nengo
 	import numpy as np
 	import pandas as pd
-	import json
+	# import json
 	spikes_in=[]
 	lifdata={}
 	while np.sum(spikes_in)==0: #rerun nengo spike generator until it returns something
@@ -73,13 +73,14 @@ def make_spikes_in(P,raw_signal):
 			eval_points, activities = nengo.utils.ensemble.tuning_curves(ideal,sim)
 		signal_in=sim.data[probe_signal]
 		spikes_in=sim.data[probe_in]
-	lifdata['signal_in']=signal_in.ravel()
-	lifdata['spikes_in']=spikes_in
-	lifdata['lif_eval_points']=eval_points.ravel()
-	lifdata['lif_activities']=activities
-	out_data=pd.DataFrame([lifdata])
-	out_data.reset_index().to_json(P['directory']+'lifdata.json',orient='records')
-	return lifdata
+	# lifdata['signal_in']=signal_in.ravel()
+	# lifdata['spikes_in']=spikes_in
+	# lifdata['lif_eval_points']=eval_points.ravel()
+	# lifdata['lif_activities']=activities
+	np.savez(P['directory']+'lifdata.npz',signal_in=signal_in.ravel(),spikes_in=spikes_in,
+			lif_eval_points=eval_points,lif_activities=activities)
+	# out_data=pd.DataFrame([lifdata])
+	# out_data.reset_index().to_json(P['directory']+'lifdata.json',orient='records')
 
 def weight_rescale(location):
 	#interpolation
