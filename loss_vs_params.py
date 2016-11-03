@@ -1,0 +1,65 @@
+'''
+Peter Duggins
+September 2016
+bionengo - interface NEURON and Bahr2 neurons with nengo
+'''
+
+from model import simulate
+import ipdb
+from initialize import ch_dir, make_signal, make_spikes_in, add_search_space
+from run_hyperopt import run_hyperopt
+from analyze import plot_final_tuning_curves
+from pathos.multiprocessing import ProcessingPool as Pool
+import copy
+import timeit
+import json
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+import os
+import pandas as pd
+
+P=eval(open('parameters.txt').read())
+upper_datadir=ch_dir()
+n_avg=5
+param='t_sample'
+sweep_param=[0.1,0.5,1.0,5.0,10.0]
+columns=('trial','param','loss','runtime')
+df=pd.DataFrame(columns=columns)
+pool = Pool(nodes=P['n_processes'])
+
+for v in range(len(sweep_param)):
+	print '%s=%s'%(param,sweep_param[v])
+	P[param]=sweep_param[v]
+	for n in range(n_avg):
+		start=timeit.default_timer()
+		os.chdir(upper_datadir)
+		print 'n=%s'%n
+		lower_datadir=ch_dir()
+		P['directory']=lower_datadir
+		raw_signal=make_signal(P)
+		make_spikes_in(P,raw_signal)
+		P_list=[]
+		for bio_idx in range(P['n_bio']):
+			P_idx=add_search_space(P,bio_idx)
+			# run_hyperopt(P_idx)
+			P_list.append(copy.copy(P_idx))
+		filenames=pool.map(run_hyperopt, P_list)
+		with open('filenames.txt','wb') as outfile:
+			json.dump(filenames,outfile)
+		loss=plot_final_tuning_curves(P,filenames)
+		stop=timeit.default_timer()
+		runtime=stop-start
+		print 'runtime=%s'%runtime
+		df=df.append(pd.DataFrame([[n,sweep_param[v],loss,runtime]],columns=columns),ignore_index=True)
+
+os.chdir(upper_datadir)
+sns.set(context='poster')
+figure1, (ax1,ax2) = plt.subplots(2, 1)
+# sns.regplot(x='param',y='loss',data=df,x_jitter=0.05)
+sns.tsplot(time='param',value='loss',unit='trial',data=df,ax=ax1)
+sns.tsplot(time='param',value='runtime',unit='trial',data=df,ax=ax2)
+ax1.set(ylabel='mean loss',title='N=%s'%n_avg)
+ax2.set(xlabel=param,ylabel='mean runtime (s)')
+plt.savefig('loss_vs_%s.png'%param)
+df.to_pickle('loss_vs_%s_dataframe.pkl'%param)

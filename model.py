@@ -67,7 +67,7 @@ def simulate(P):
 	# print 'loss - %s sec' % (stop6-start6)
 	del bioneuron
 	stop=timeit.default_timer()
-	print 'Simulate Runtime - %s sec' %(stop-start)
+	# print 'Simulate Runtime - %s sec' %(stop-start)
 	return {'loss': loss, 'run_id':run_id, 'status': hyperopt.STATUS_OK}
 
 
@@ -79,6 +79,7 @@ def main():
 	from pathos.multiprocessing import ProcessingPool as Pool
 	import copy
 	import timeit
+	import json
 
 	main_start=timeit.default_timer()
 	P=eval(open('parameters.txt').read())
@@ -97,10 +98,13 @@ def main():
 		P_list.append(copy.copy(P_idx))
 
 	filenames=pool.map(run_hyperopt, P_list)
+	with open('filenames.txt','wb') as outfile:
+		json.dump(filenames,outfile)
 
-	plot_final_tuning_curves(P,filenames)
+	total_loss=plot_final_tuning_curves(P,filenames)
 	main_stop=timeit.default_timer()
 	print '\nTotal Runtime - %s sec' %(main_stop-main_start)
+	return total_loss
 
 if __name__=='__main__':
 	main()

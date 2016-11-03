@@ -233,4 +233,6 @@ def plot_final_tuning_curves(P,filenames):
 		bioplot=ax1.plot(X,f_lif_rate(X),linestyle='--',color=lifplot[0].get_color())
 		losses.append(loss)
 	ax1.set(ylim=(0,60),title='total loss = %s'%np.sum(losses))
-	figure1.savefig('biopop_tuning_curves.png')		
+	figure1.savefig('biopop_tuning_curves.png')
+	plt.close(figure1)
+	return np.sum(losses)
