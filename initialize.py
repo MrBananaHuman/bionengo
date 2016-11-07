@@ -73,8 +73,10 @@ def make_spikes_in(P,raw_signal):
 			eval_points, activities = nengo.utils.ensemble.tuning_curves(ideal,sim)
 		signal_in=sim.data[probe_signal]
 		spikes_in=sim.data[probe_in]
-	np.savez(P['directory']+'lifdata.npz',signal_in=signal_in.ravel(),spikes_in=spikes_in,
-			lif_eval_points=eval_points,lif_activities=activities)
+	np.savez(P['directory']+'lifdata.npz',
+			signal_in=signal_in.ravel(),spikes_in=spikes_in,
+			lif_eval_points=eval_points,lif_activities=activities,
+			gains=ideal.gain, biases=ideal.bias)
 
 def weight_rescale(location):
 	#interpolation

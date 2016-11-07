@@ -67,7 +67,7 @@ def simulate(P):
 	# print 'loss - %s sec' % (stop6-start6)
 	del bioneuron
 	stop=timeit.default_timer()
-	# print 'Simulate Runtime - %s sec' %(stop-start)
+	print 'Simulate Runtime - %s sec' %(stop-start)
 	return {'loss': loss, 'run_id':run_id, 'status': hyperopt.STATUS_OK}
 
 
@@ -85,6 +85,8 @@ def main():
 	P=eval(open('parameters.txt').read())
 	datadir=ch_dir()
 	P['directory']=datadir
+	with open('params.txt','wb') as param_outfile:
+		json.dump(P,param_outfile)
 
 	print 'Generating input spikes ...'
 	raw_signal=make_signal(P)

@@ -22,11 +22,10 @@ import pandas as pd
 P=eval(open('parameters.txt').read())
 upper_datadir=ch_dir()
 n_avg=5
-param='t_sample'
-sweep_param=[0.1,0.5,1.0,5.0,10.0]
+param='n_lif'
+sweep_param=[5,10,20,30,40,50,75,100,200]
 columns=('trial','param','loss','runtime')
 df=pd.DataFrame(columns=columns)
-pool = Pool(nodes=P['n_processes'])
 
 for v in range(len(sweep_param)):
 	print '%s=%s'%(param,sweep_param[v])
@@ -44,9 +43,13 @@ for v in range(len(sweep_param)):
 			P_idx=add_search_space(P,bio_idx)
 			# run_hyperopt(P_idx)
 			P_list.append(copy.copy(P_idx))
-		filenames=pool.map(run_hyperopt, P_list)
+		# pool = Pool(nodes=P['n_processes'])
+		# filenames=pool.map(run_hyperopt, P_list) #multithread
+		filenames=[run_hyperopt(P_idx) for P_idx in P_list] #single thread
 		with open('filenames.txt','wb') as outfile:
 			json.dump(filenames,outfile)
+		with open('params.txt','wb') as param_outfile:
+			json.dump(P,param_outfile)
 		loss=plot_final_tuning_curves(P,filenames)
 		stop=timeit.default_timer()
 		runtime=stop-start
@@ -54,12 +57,14 @@ for v in range(len(sweep_param)):
 		df=df.append(pd.DataFrame([[n,sweep_param[v],loss,runtime]],columns=columns),ignore_index=True)
 
 os.chdir(upper_datadir)
-sns.set(context='poster')
-figure1, (ax1,ax2) = plt.subplots(2, 1)
+df.to_pickle('loss_vs_%s_dataframe.pkl'%param)
+# sns.set(context='poster')
+figure1, (ax1,ax2) = plt.subplots(2, 1,sharex=True)
 # sns.regplot(x='param',y='loss',data=df,x_jitter=0.05)
 sns.tsplot(time='param',value='loss',unit='trial',data=df,ax=ax1)
 sns.tsplot(time='param',value='runtime',unit='trial',data=df,ax=ax2)
+# sns.boxplot(x='param',y='loss',data=df,ax=ax1)
+# sns.boxplot(x='param',y='runtime',data=df,ax=ax2)
 ax1.set(ylabel='mean loss',title='N=%s'%n_avg)
 ax2.set(xlabel=param,ylabel='mean runtime (s)')
 plt.savefig('loss_vs_%s.png'%param)
-df.to_pickle('loss_vs_%s_dataframe.pkl'%param)

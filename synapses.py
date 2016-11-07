@@ -13,8 +13,8 @@ class ExpSyn():
         self.weight = weight
         if self.weight >= 0.0: self.syn.e = self.e_exc
         else: self.syn.e = self.e_inh
-        # self.conn = neuron.h.NetCon(None, self.syn) #time of spike arrival assigned in run.py
-        # self.conn.weight[0]=abs(self.weight)
+        self.spike_in = neuron.h.NetCon(None, self.syn) #time of spike arrival assigned in nengo step
+        self.spike_in.weight[0]=abs(self.weight)
 
 class Exp2Syn():
 
@@ -30,8 +30,8 @@ class Exp2Syn():
         self.weight = weight
         if self.weight >= 0.0: self.syn.e = self.e_exc
         else: self.syn.e = self.e_inh
-        # self.conn = neuron.h.NetCon(None, self.syn) #time of spike arrival assigned in run.py
-        # self.conn.weight[0]=abs(self.weight)
+        self.spike_in = neuron.h.NetCon(None, self.syn) #time of spike arrival assigned in nengo step
+        self.spike_in.weight[0]=abs(self.weight)
 
 #TODO
 # class AlphaSyn():
