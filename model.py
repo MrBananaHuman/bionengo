@@ -3,6 +3,9 @@ Peter Duggins
 September 2016
 bionengo - interface NEURON and Bahr2 neurons with nengo
 '''
+import timeit
+global headstart
+headstart=timeit.default_timer()
 
 def simulate(P):
 	import numpy as np
@@ -16,7 +19,12 @@ def simulate(P):
 	from analyze import	plot_rates, plot_tuning_curve					
 	from neuron_methods import make_bioneuron, run_bioneuron, connect_bioneuron
 	import timeit
+	import gc
 
+	global headend
+	global headstart
+	headend=timeit.default_timer()
+	print 'Head Runtime \t-\t %s sec' %(headend-headstart)
 	start=timeit.default_timer()
 	run_id=make_addon(6)
 	os.chdir(P['directory'])
@@ -66,8 +74,10 @@ def simulate(P):
 	# stop6=timeit.default_timer()
 	# print 'loss - %s sec' % (stop6-start6)
 	del bioneuron
+	# gc.collect()
 	stop=timeit.default_timer()
-	print 'Simulate Runtime - %s sec' %(stop-start)
+	print 'Simulate Runtime -\t %s sec' %(stop-start)
+	headstart=timeit.default_timer()
 	return {'loss': loss, 'run_id':run_id, 'status': hyperopt.STATUS_OK}
 
 
@@ -98,6 +108,7 @@ def main():
 		P_idx=add_search_space(P,bio_idx)
 		# run_hyperopt(P_idx)
 		P_list.append(copy.copy(P_idx))
+
 
 	filenames=pool.map(run_hyperopt, P_list)
 	with open('filenames.txt','wb') as outfile:

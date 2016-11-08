@@ -21,6 +21,8 @@ class Bahl():
         self.t_record.record(neuron.h._ref_t)
         self.spikes = neuron.h.Vector()
         self.ap_counter.record(neuron.h.ref(self.spikes))
+        self.nengo_spike_times=[]
+        self.nengo_voltages=[]
 
     def add_bias(self,bias):
         self.bias = bias
@@ -34,7 +36,7 @@ class Bahl():
         self.vecstim[idx]={'vstim':[],'vtimes':[]} #list of input spike times from this neuron
         self.netcons[idx]=[] #list of netcon objects between input vecstim and synapses for this nrn
 
-    def add_synapse(self,idx,syn_type,section,weight,tau,tau2):
+    def add_synapse(self,idx,syn_type,section,weight,tau,tau2=0.005):
         if syn_type == 'ExpSyn':
             self.synapses[idx].append(ExpSyn(section,weight,tau))
         elif syn_type == 'Exp2Syn':
