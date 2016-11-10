@@ -126,12 +126,19 @@ def plot_tuning_curve(P,X,f_bio_rate,f_lif_rate,loss,run_id):
 def plot_loss(P,trials):
 	import matplotlib.pyplot as plt
 	import seaborn as sns
+	import ipdb
 	sns.set(context='poster')
-	figure1, ax1 = plt.subplots(1, 1)
+	figure1, (ax1,ax2) = plt.subplots(2, 1,sharex=True)
 	X=[t['tid'] for t in trials]
 	Y=[t['result']['loss'] for t in trials]
+	runtime=[t['result']['runtime'] for t in trials]
+	headtime=[t['result']['headtime'] for t in trials]
 	ax1.scatter(X,Y)
-	ax1.set(xlabel='$t$',ylabel='loss')
+	ax2.scatter(X,runtime,color='g',label='runtime')
+	ax2.scatter(X,headtime,color='r',label='headtime')
+	ax1.set(ylabel='loss')
+	ax2.set(xlabel='$t$',ylabel='time (s)')
+	plt.legend()
 	figure1.savefig(P['directory']+'bioneuron_%s_hyperopt_result.png'%P['bio_idx'])
 
 def export_bioneuron(P,run_id,spike_times,loss):

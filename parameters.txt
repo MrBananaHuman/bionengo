@@ -13,7 +13,7 @@
 	'min_lif_rate':40,
 	'max_lif_rate':60,
 
-	'n_bio':1,
+	'n_bio':5,
 	'n_lif':50, #255 +/- 13 according to Markram et al 2015
 	'n_syn':5, #5.5 +/- 1.1 according to Ramaswamy et al 2012
 	'w_0':0.0005,
@@ -40,7 +40,8 @@
 	'dx':0.05,
 	'loss_cutoff':0.1,
 
-	'max_evals':1000,
+	'max_evals':3000,
 	'n_processes':5,
+	'hyperopt_algo':'random',
 
 }

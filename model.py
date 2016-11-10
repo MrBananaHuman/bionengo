@@ -24,7 +24,7 @@ def simulate(P):
 	global headend
 	global headstart
 	headend=timeit.default_timer()
-	print 'Head Runtime \t-\t %s sec' %(headend-headstart)
+	# print 'Head Runtime \t-\t %s sec' %(headend-headstart)
 	start=timeit.default_timer()
 	run_id=make_addon(6)
 	os.chdir(P['directory'])
@@ -73,12 +73,15 @@ def simulate(P):
 	export_bioneuron(P,run_id,spike_times,loss)
 	# stop6=timeit.default_timer()
 	# print 'loss - %s sec' % (stop6-start6)
-	del bioneuron
+	# del bioneuron
 	# gc.collect()
 	stop=timeit.default_timer()
+	runtime=(stop-start)
+	headtime=(headend-headstart)
 	print 'Simulate Runtime -\t %s sec' %(stop-start)
 	headstart=timeit.default_timer()
-	return {'loss': loss, 'run_id':run_id, 'status': hyperopt.STATUS_OK}
+	return {'loss': loss, 'run_id':run_id, \
+		'headtime': headtime, 'runtime':runtime, 'status': hyperopt.STATUS_OK}
 
 
 def main():

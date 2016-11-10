@@ -1,6 +1,7 @@
 import nengo
 import neuron
 import numpy as np
+import ipdb
 
 class BioneuronNode(nengo.Node):
 	
@@ -23,14 +24,14 @@ class BioneuronNode(nengo.Node):
 		if self.filenames == None:
 			self.filenames=self.optimize_biopop()
 		self.biopop=self.load_biopop()
+		self.save_sample_activities()
+		self.spike_train=[]
 		neuron.h.dt = dt_neuron*1000
 		neuron.init()
 
 	def load_biopop(self):
 		import json
-		import numpy as np
 		from neurons import Bahl
-		import ipdb
 		f=open(self.filenames,'r')
 		files=json.load(f)
 		biopop=[]
@@ -56,6 +57,23 @@ class BioneuronNode(nengo.Node):
 									self.tau,self.syn_type)
 		return filenames
 
+	def save_sample_activities(self):
+		import json
+		f=open(self.filenames,'r')
+		files=json.load(f)
+		A_ideal=[]
+		A_actual=[]
+		x_sample=0
+		for bio_idx in range(self.n_bio):
+			with open(files[bio_idx],'r') as data_file: 
+				bioneuron_info=json.load(data_file)
+			A_ideal.append(bioneuron_info['A_ideal'])
+			A_actual.append(bioneuron_info['A_actual'])
+			x_sample=bioneuron_info['x_sample']
+		self.x_sample=np.array(x_sample)
+		self.A_ideal=np.array(A_ideal).T
+		self.A_actual=np.array(A_actual).T
+
 	def step(self,t,x):
 		#x is an array, size n_in, of whether input neurons spiked at time=t
 		for n in range(self.n_in):
@@ -80,6 +98,7 @@ class BioneuronNode(nengo.Node):
 			#store voltage at the end of the delta_t timestep
 			bioneuron.nengo_voltages.append(np.array(bioneuron.v_record)[-1])
 		output=np.array(output)/self.dt_nengo
+		self.spike_train.append(output)
 		return output
 
 

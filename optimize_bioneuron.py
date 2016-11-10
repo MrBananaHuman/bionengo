@@ -186,7 +186,7 @@ def tuning_curve_loss(P,lif_eval_points,lif_activities,bio_eval_points,bio_activ
 	loss=np.sqrt(np.average((f_bio_rate(X)-f_lif_rate(X))**2))
 	return X,f_bio_rate,f_lif_rate,loss
 
-def export_bioneuron(P,run_id,spike_times,loss):
+def export_bioneuron(P,run_id,spike_times,X,f_bio_rate,f_lif_rate,loss):
 	import json
 	import numpy as np
 	import ipdb
@@ -203,6 +203,9 @@ def export_bioneuron(P,run_id,spike_times,loss):
 		'locations': locations.tolist(),
 		'bias': bias,
 		'spike_times': spike_times.tolist(),
+		'x_sample': X.tolist(),
+		'A_ideal': f_lif_rate(X).tolist(),
+		'A_actual': f_bio_rate(X).tolist(),
 		'loss': loss,
 		}
 	with open(run_id+'_bioneuron_%s.json'%P['bio_idx'], 'w') as data_file:
@@ -357,7 +360,7 @@ def simulate(P):
 	bio_eval_points, bio_activities = make_tuning_curves(P,signal_in,biorates)	
 	X,f_bio_rate,f_lif_rate,loss=tuning_curve_loss(
 			P,lif_eval_points,lif_activities,bio_eval_points,bio_activities)
-	export_bioneuron(P,run_id,spike_times,loss)
+	export_bioneuron(P,run_id,spike_times,X,f_bio_rate,f_lif_rate,loss)
 	del bioneuron
 	gc.collect()
 	stop=timeit.default_timer()
@@ -417,4 +420,4 @@ def optimize_bioneuron(n_in,n_bio,n_syn,evals=1000,
 		json.dump(filenames,outfile)
 	biopop_dict=get_best_biopop(P,filenames)
 	plot_final_tuning_curves(P,biopop_dict)
-	return filenames
+	return P['directory']+'filenames.txt'
