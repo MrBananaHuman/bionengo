@@ -392,7 +392,7 @@ def optimize_bioneuron(n_in,n_bio,n_syn,evals=1000,
 		'bias_max':3.0,
 		'n_seg': 5,
 		'dx':0.05,
-		'n_processes':5,
+		'n_processes':n_bio,
 		'signal':
 			{'type':'equalpower','max_freq':10.0,'mean':0.0,'std':1.0},
 			#{'type':'constant','value':1.0},
