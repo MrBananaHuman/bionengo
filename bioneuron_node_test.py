@@ -6,17 +6,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from nengo.utils.matplotlib import rasterplot
 
-def get_spike_train(spike_times):
-	biospikes=[]
-	for bio_idx in range(len(spike_times)):
-		spike_train=np.zeros_like(sim.trange())
-		for t_idx in np.array(spike_times[bio_idx])/dt_nengo:
-			if t_idx >= len(spike_train): break
-			spike_train[t_idx]=1.0/dt_nengo
-		biospikes.append(spike_train)
-	biospikes=np.array(biospikes).T
-	return biospikes
-
 def decoders_from_tuning_curve(bionode,noise=0.1,function=lambda x: x):
 	# A=np.matrix(bionode.A_ideal)
 	# A_T=np.matrix(bionode.A_ideal.T)
@@ -27,9 +16,10 @@ def decoders_from_tuning_curve(bionode,noise=0.1,function=lambda x: x):
 	# upsilon=A_T*f_X/S
 	# gamma=A_T*A/S + np.identity(bionode.n_bio)*(noise*np.max(A))**2
 	# d=np.linalg.inv(gamma)*upsilon
+	np.savez('A_and_evals_from_tuning_curve.npz',A=A_actual,evals=bionode.x_sample)
 	solver=nengo.solvers.LstsqL2()
 	d,info=solver(np.array(A),np.array(f_X))
-	return d, f_X, A
+	return d, np.array(f_X), np.array(A)
 
 def decoders_from_spikes(n_in,n_bio,n_syn,dt_nengo,dt_neuron,evals,filenames,
 						kernel,t_sample):
@@ -47,6 +37,7 @@ def decoders_from_spikes(n_in,n_bio,n_syn,dt_nengo,dt_neuron,evals,filenames,
 		decoder_sim.run(t_sample)
 	A_rates=[]
 	spike_train=np.array(decoder_bionode.spike_train)
+	np.savez('spikes_from_sin_input.npz',spike_train=spike_train)
 	for i in range(spike_train.shape[1]):
 		rates = np.convolve(kernel, spike_train[:,i], mode='same')
 		A_rates.append(rates)
@@ -105,10 +96,8 @@ tkern = np.arange(-t_sim/20.0,t_sim/20.0,dt_nengo)
 kernel = np.exp(-tkern**2/(2*sigma**2))
 kernel /= kernel.sum()
 # d,x_sample,A_sample=decoders_from_tuning_curve(bionode,noise=0.1,function=lambda x: x)
-d,x_sample,A_sample=decoders_from_spikes(n_in,n_bio,n_syn,
-						dt_nengo,dt_neuron,
-						evals,filenames,
-						kernel,0.5)
+d,x_sample,A_sample=decoders_from_spikes(n_in,n_bio,n_syn,dt_nengo,dt_neuron,
+						evals,filenames,kernel,0.5)
 xhat,A=rate_estimate(bionode,d,kernel)
 
 sns.set(context='poster')
