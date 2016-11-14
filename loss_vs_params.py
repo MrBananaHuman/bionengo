@@ -22,8 +22,8 @@ import pandas as pd
 P=eval(open('parameters.txt').read())
 upper_datadir=ch_dir()
 n_avg=5
-param='n_lif'
-sweep_param=[5,10,20,30,40,50,75,100,200]
+param='bias_max'
+sweep_param=[-1.5,-1.0,-0.5,0.0,0.5,1.0,1.5]
 columns=('trial','param','loss','runtime')
 df=pd.DataFrame(columns=columns)
 
@@ -43,13 +43,13 @@ for v in range(len(sweep_param)):
 			P_idx=add_search_space(P,bio_idx)
 			# run_hyperopt(P_idx)
 			P_list.append(copy.copy(P_idx))
-		# pool = Pool(nodes=P['n_processes'])
-		# filenames=pool.map(run_hyperopt, P_list) #multithread
-		filenames=[run_hyperopt(P_idx) for P_idx in P_list] #single thread
+		pool = Pool(nodes=P['n_processes'])
+		filenames=pool.map(run_hyperopt, P_list) #multithread
+		# filenames=[run_hyperopt(P_idx) for P_idx in P_list] #single thread
 		with open('filenames.txt','wb') as outfile:
 			json.dump(filenames,outfile)
-		with open('params.txt','wb') as param_outfile:
-			json.dump(P,param_outfile)
+		# with open('params.txt','wb') as param_outfile:
+		# 	json.dump(P,param_outfile)
 		loss=plot_final_tuning_curves(P,filenames)
 		stop=timeit.default_timer()
 		runtime=stop-start

@@ -6,27 +6,36 @@ import ipdb
 class BioneuronNode(nengo.Node):
 	
 	def __init__(self,n_in,n_bio,n_syn,
-					evals=1000,filenames=None,
 					dt_neuron=0.0001,dt_nengo=0.001,
 					tau=0.01,synapse_type='ExpSyn'):
 		super(BioneuronNode,self).__init__(self.step,size_in=n_in,size_out=n_bio)
-		self.n_in=n_in
+		self.n_in=n_in #? how do deal with multiple input sizes
 		self.n_bio=n_bio
 		self.n_syn=n_syn
 		self.tau=tau
 		self.syn_type=synapse_type
 		assert dt_nengo >= dt_neuron
-		self.evals=evals
 		self.dt_neuron=dt_neuron
 		self.dt_nengo=dt_nengo
-		self.delta_t=dt_nengo/dt_neuron * dt_neuron*1000
+		self.delta_t=dt_nengo*1000
+		self.spike_train=[]
+		self.ens_in_seed=None
+		self.evals=None
+		self.filenames=None
+		self.biopop=None
+		self.x_sample=None
+		self.A_ideal=None
+		self.A_actual=None
+		neuron.h.dt = dt_neuron*1000
+
+	def connect_to(self,ens_in_seed,evals=1000,filenames=None):
+		self.ens_in_seed=ens_in_seed #make a list for multiple inputs
+		self.evals=evals
 		self.filenames=filenames
 		if self.filenames == None:
 			self.filenames=self.optimize_biopop()
 		self.biopop=self.load_biopop()
 		self.save_sample_activities()
-		self.spike_train=[]
-		neuron.h.dt = dt_neuron*1000
 		neuron.init()
 
 	def load_biopop(self):
@@ -52,7 +61,7 @@ class BioneuronNode(nengo.Node):
 
 	def optimize_biopop(self):
 		from optimize_bioneuron import optimize_bioneuron
-		filenames=optimize_bioneuron(self.n_in,self.n_bio,self.n_syn,
+		filenames=optimize_bioneuron(self.ens_in_seed,self.n_in,self.n_bio,self.n_syn,
 									self.evals,self.dt_neuron,self.dt_nengo,
 									self.tau,self.syn_type)
 		return filenames
@@ -82,19 +91,19 @@ class BioneuronNode(nengo.Node):
 				for bioneuron in self.biopop:
 					for syn in bioneuron.synapses[n]:
 						syn.spike_in.event(1.0*t*1000) #convert from s to ms
-		neuron.run(neuron.h.t + self.delta_t)
+		desired_t=t*1000
+		neuron.run(desired_t) #no floating point addition errors!
 		output=[]
 		for bioneuron in self.biopop:
 			spike_times=np.round(np.array(bioneuron.spikes),decimals=3)
 			if len(spike_times) == 0:
 				output.append(0)
 			else:
-				recent_spike_times=np.where(1.0*spike_times/1000>(t-1.0*self.delta_t/1000))[0]
-				count=len(recent_spike_times)
+				count=np.sum(spike_times>(t-self.dt_nengo)*1000)
 				output.append(count)
 				#store spike time according to dt_nengo
-				for st in recent_spike_times:
-					bioneuron.nengo_spike_times.append(spike_times[st]/1000)
+				bioneuron.nengo_spike_times.extend(
+						spike_times[spike_times>(t-self.dt_nengo)*1000])
 			#store voltage at the end of the delta_t timestep
 			bioneuron.nengo_voltages.append(np.array(bioneuron.v_record)[-1])
 		output=np.array(output)/self.dt_nengo

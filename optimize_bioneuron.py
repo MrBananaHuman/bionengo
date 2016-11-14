@@ -58,19 +58,23 @@ def make_spikes_in(P,raw_signal):
 	import nengo
 	import numpy as np
 	import pandas as pd
-	# import json
+	import ipdb
 	spikes_in=[]
 	lifdata={}
 	while np.sum(spikes_in)==0: #rerun nengo spike generator until it returns something
 		with nengo.Network() as model:
 			signal = nengo.Node(
 					output=lambda t: raw_signal[int(t/P['dt'])])
-			ideal = nengo.Ensemble(P['n_bio'],
-					dimensions=1, #ideal tuning curve has limited rate
-					max_rates=nengo.dists.Uniform(P['min_in_rate'],P['max_lif_rate']))
-			ens_in = nengo.Ensemble(P['n_in'],
-					dimensions=1)		
-			nengo.Connection(signal,ens_in)
+			# ideal = nengo.Ensemble(P['n_bio'],dimensions=1,
+			# 				max_rates=nengo.dists.Uniform(P['min_in_rate'],P['max_lif_rate']))
+			ideal = nengo.Ensemble(n_neurons=2,dimensions=1,
+									encoders=[[1],[-1]],
+									max_rates=[80,80],
+									intercepts=[-0.25,-0.25])
+			ens_in = nengo.Ensemble(n_neurons=P['n_in'],
+									dimensions=1,
+									seed=P['ens_in_seed'])
+			nengo.Connection(signal,ens_in,synapse=None)
 			probe_signal = nengo.Probe(signal)
 			probe_in = nengo.Probe(ens_in.neurons,'spikes')
 		with nengo.Simulator(model,dt=P['dt']) as sim:
@@ -82,6 +86,7 @@ def make_spikes_in(P,raw_signal):
 			signal_in=signal_in.ravel(),spikes_in=spikes_in,
 			lif_eval_points=eval_points,lif_activities=activities,
 			gains=ideal.gain, biases=ideal.bias)
+	x_test, A_test=nengo.utils.ensemble.tuning_curves(ens_in,sim)
 
 def weight_rescale(location):
 	#interpolation
@@ -367,7 +372,7 @@ def simulate(P):
 	print 'Simulate Runtime - %s sec' %(stop-start)
 	return {'loss': loss, 'run_id':run_id, 'status': hyperopt.STATUS_OK}
 
-def optimize_bioneuron(n_in,n_bio,n_syn,evals=1000,
+def optimize_bioneuron(ens_in_seed,n_in,n_bio,n_syn,evals=1000,
 					dt_neuron=0.0001,dt_nengo=0.001,
 					tau=0.01,synapse_type='ExpSyn'):
 	import json
@@ -377,6 +382,7 @@ def optimize_bioneuron(n_in,n_bio,n_syn,evals=1000,
 	datadir=ch_dir()
 	P={
 		'directory':datadir,
+		'ens_in_seed':ens_in_seed,
 		'n_in':n_in,
 		'n_syn':n_syn,
 		'n_bio':n_bio,
@@ -389,12 +395,12 @@ def optimize_bioneuron(n_in,n_bio,n_syn,evals=1000,
 		'max_lif_rate':60,
 		'w_0':0.0005,
 		'bias_min':-3.0,
-		'bias_max':3.0,
+		'bias_max':-0.5,
 		'n_seg': 5,
 		'dx':0.05,
 		'n_processes':n_bio,
 		'signal':
-			{'type':'equalpower','max_freq':10.0,'mean':0.0,'std':1.0},
+			{'type':'equalpower','max_freq':3.0,'mean':0.0,'std':1.0},
 			#{'type':'constant','value':1.0},
 			#{'type':'pink_noise','mean':0.0,'std':1.0},
 			#{'type':'poisson','mean_freq':5.0,'max_freq':10.0},
