@@ -62,31 +62,30 @@ def make_spikes_in(P,raw_signal):
 	spikes_in=[]
 	lifdata={}
 	while np.sum(spikes_in)==0: #rerun nengo spike generator until it returns something
-		with nengo.Network() as model:
-			signal = nengo.Node(
-					output=lambda t: raw_signal[int(t/P['dt'])])
-			# ideal = nengo.Ensemble(P['n_bio'],dimensions=1,
-			# 				max_rates=nengo.dists.Uniform(P['min_in_rate'],P['max_lif_rate']))
-			ideal = nengo.Ensemble(n_neurons=2,dimensions=1,
-									encoders=[[1],[-1]],
-									max_rates=[80,80],
-									intercepts=[-0.25,-0.25])
+		with nengo.Network() as opt_model:
+			signal = nengo.Node(lambda t: raw_signal[int(t/P['dt'])])
+			ideal = nengo.Ensemble(P['n_bio'],dimensions=1,
+							max_rates=nengo.dists.Uniform(P['min_in_rate'],P['max_lif_rate']))
+			# ideal = nengo.Ensemble(n_neurons=2,dimensions=1,
+			# 						encoders=[[1],[-1]],
+			# 						max_rates=[60,60],
+			# 						intercepts=[-0.75,-0.75])
 			ens_in = nengo.Ensemble(n_neurons=P['n_in'],
 									dimensions=1,
 									seed=P['ens_in_seed'])
 			nengo.Connection(signal,ens_in,synapse=None)
 			probe_signal = nengo.Probe(signal)
 			probe_in = nengo.Probe(ens_in.neurons,'spikes')
-		with nengo.Simulator(model,dt=P['dt']) as sim:
-			sim.run(P['t_sample'])
-			eval_points, activities = nengo.utils.ensemble.tuning_curves(ideal,sim)
-		signal_in=sim.data[probe_signal]
-		spikes_in=sim.data[probe_in]
+		with nengo.Simulator(opt_model,dt=P['dt']) as opt_sim:
+			opt_sim.run(P['t_sample'])
+			eval_points, activities = nengo.utils.ensemble.tuning_curves(ideal,opt_sim)
+		signal_in=opt_sim.data[probe_signal]
+		spikes_in=opt_sim.data[probe_in]
 	np.savez(P['directory']+'lifdata.npz',
 			signal_in=signal_in.ravel(),spikes_in=spikes_in,
 			lif_eval_points=eval_points,lif_activities=activities,
 			gains=ideal.gain, biases=ideal.bias)
-	x_test, A_test=nengo.utils.ensemble.tuning_curves(ens_in,sim)
+	x_test, A_test=nengo.utils.ensemble.tuning_curves(ens_in,opt_sim)
 
 def weight_rescale(location):
 	#interpolation
@@ -236,33 +235,33 @@ def get_best_biopop(P,filenames):
 		biopop.append(bioneuron)
 	return biopop
 
-def plot_final_tuning_curves(P,biopop):
-	import numpy as np
-	import matplotlib.pyplot as plt
-	import seaborn as sns
-	import ipdb
-	import json
-	lifdata=np.load(P['directory']+'lifdata.npz')
-	signal_in=lifdata['signal_in']
-	spikes_in=lifdata['spikes_in']
-	lif_eval_points=lifdata['lif_eval_points'].ravel()
-	lif_activities=lifdata['lif_activities']
-	losses=[]
-	sns.set(context='poster')
-	figure1, ax1 = plt.subplots(1, 1)
-	ax1.set(xlabel='x',ylabel='firing rate (Hz)')
-	for bio_idx in range(P['n_bio']):
-		biospikes, biorates=get_rates(P,np.array(biopop[bio_idx]['spike_times']))
-		bio_eval_points, bio_activities = make_tuning_curves(P,signal_in,biorates)
-		X,f_bio_rate,f_lif_rate,loss=tuning_curve_loss(
-				P,lif_eval_points,lif_activities[:,bio_idx],
-				bio_eval_points,bio_activities)
-		lifplot=ax1.plot(X,f_bio_rate(X),linestyle='-')
-		bioplot=ax1.plot(X,f_lif_rate(X),linestyle='--',color=lifplot[0].get_color())
-		losses.append(loss)
-	ax1.set(ylim=(0,60),title='total loss = %s'%np.sum(losses))
-	figure1.savefig('biopop_tuning_curves.png')
-	plt.close('all')
+# def plot_final_tuning_curves(P,biopop):
+# 	import numpy as np
+# 	import matplotlib.pyplot as plt
+# 	import seaborn as sns
+# 	import ipdb
+# 	import json
+# 	lifdata=np.load(P['directory']+'lifdata.npz')
+# 	signal_in=lifdata['signal_in']
+# 	spikes_in=lifdata['spikes_in']
+# 	lif_eval_points=lifdata['lif_eval_points'].ravel()
+# 	lif_activities=lifdata['lif_activities']
+# 	losses=[]
+# 	sns.set(context='poster')
+# 	figure1, ax1 = plt.subplots(1, 1)
+# 	ax1.set(xlabel='x',ylabel='firing rate (Hz)')
+# 	for bio_idx in range(P['n_bio']):
+# 		biospikes, biorates=get_rates(P,np.array(biopop[bio_idx]['spike_times']))
+# 		bio_eval_points, bio_activities = make_tuning_curves(P,signal_in,biorates)
+# 		X,f_bio_rate,f_lif_rate,loss=tuning_curve_loss(
+# 				P,lif_eval_points,lif_activities[:,bio_idx],
+# 				bio_eval_points,bio_activities)
+# 		lifplot=ax1.plot(X,f_bio_rate(X),linestyle='-')
+# 		bioplot=ax1.plot(X,f_lif_rate(X),linestyle='--',color=lifplot[0].get_color())
+# 		losses.append(loss)
+# 	ax1.set(ylim=(0,60))
+# 	figure1.savefig('biopop_tuning_curves.png')
+# 	plt.close('all')
 
 
 '''
@@ -395,12 +394,12 @@ def optimize_bioneuron(ens_in_seed,n_in,n_bio,n_syn,evals=1000,
 		'max_lif_rate':60,
 		'w_0':0.0005,
 		'bias_min':-3.0,
-		'bias_max':-0.5,
+		'bias_max':3.0,
 		'n_seg': 5,
-		'dx':0.05,
+		'dx':0.01,
 		'n_processes':n_bio,
 		'signal':
-			{'type':'equalpower','max_freq':3.0,'mean':0.0,'std':1.0},
+			{'type':'equalpower','max_freq':5.0,'mean':0.0,'std':1.0},
 			#{'type':'constant','value':1.0},
 			#{'type':'pink_noise','mean':0.0,'std':1.0},
 			#{'type':'poisson','mean_freq':5.0,'max_freq':10.0},
@@ -420,10 +419,11 @@ def optimize_bioneuron(ens_in_seed,n_in,n_bio,n_syn,evals=1000,
 	pool = Pool(nodes=P['n_processes'])
 	for bio_idx in range(P['n_bio']):
 		P_idx=add_search_space(P,bio_idx)
+		# f=run_hyperopt(P_idx)
 		P_list.append(copy.copy(P_idx))
 	filenames=pool.map(run_hyperopt, P_list)
 	with open('filenames.txt','wb') as outfile:
 		json.dump(filenames,outfile)
 	biopop_dict=get_best_biopop(P,filenames)
-	plot_final_tuning_curves(P,biopop_dict)
+	# plot_final_tuning_curves(P,biopop_dict)
 	return P['directory']+'filenames.txt'
