@@ -26,6 +26,8 @@ class BioneuronNode(nengo.Node):
 		self.x_sample=None
 		self.A_ideal=None
 		self.A_actual=None
+		self.d=None
+		self.decoded=[]
 		neuron.h.dt = dt_neuron*1000
 
 	def connect_to(self,ens_in_seed,evals=1000,filenames=None):
@@ -36,6 +38,7 @@ class BioneuronNode(nengo.Node):
 			self.filenames=self.optimize_biopop()
 		self.biopop=self.load_biopop()
 		self.save_sample_activities()
+		self.d=self.decoders_from_sample_activities()
 		neuron.init()
 
 	def load_biopop(self):
@@ -83,6 +86,14 @@ class BioneuronNode(nengo.Node):
 		self.A_ideal=np.array(A_ideal).T
 		self.A_actual=np.array(A_actual).T
 
+	def decoders_from_sample_activities(self,function=lambda x: x):
+		A=np.matrix(self.A_actual)
+		A_T=np.matrix(self.A_actual.T)
+		f_X=np.matrix(function(self.x_sample)).T
+		solver=nengo.solvers.LstsqL2()
+		d,info=solver(np.array(A),np.array(f_X))
+		return d
+
 	def step(self,t,x):
 		#x is an array, size n_in, of whether input neurons spiked at time=t
 		for n in range(self.n_in):
@@ -108,9 +119,5 @@ class BioneuronNode(nengo.Node):
 			bioneuron.nengo_voltages.append(np.array(bioneuron.v_record)[-1])
 		output=np.array(output)/self.dt_nengo
 		self.spike_train.append(output)
+		# return np.dot(output,self.d)
 		return output
-
-
-
-
-

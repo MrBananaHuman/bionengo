@@ -85,17 +85,17 @@ def main():
 	dt_nengo=0.0001
 	dt_neuron=0.0001
 	filenames=None #TODO: bug when t_sim > t_sample and filenames=None
-	# filenames='/home/pduggins/bionengo/'+'data/0NP48SK8A/'+'filenames.txt'
-	# filenames='/home/pduggins/bionengo/'+'data/211BF3ZY7/'+'filenames.txt'
+	filenames='/home/pduggins/bionengo/'+'data/QMEPDX446/'+'filenames.txt'
 	# filenames='/home/pduggins/bionengo/'+'data/FMYBKKBPL/'+'filenames.txt' #2 opposing neurons
 	# filenames='/home/pduggins/bionengo/'+'data/LJC9G27PJ/'+'filenames.txt' #2 opposing neurons
 	n_in=50
 	n_bio=10
 	n_syn=5
-	evals=2000
-	t_sim=2.0
+	evals=3000
+	t_sim=1.0
 	kernel_type='gaussian'
 	tau_filter=0.01 #0.01, 0.2
+
 	with nengo.Network() as model:
 		stim=nengo.Node(output=lambda t: signal(t))
 		ens_in=nengo.Ensemble(n_neurons=n_in,dimensions=1,seed=333)
@@ -106,14 +106,19 @@ def main():
 		# 						encoders=[[1],[-1]],
 		# 						max_rates=[60,60],
 		# 						intercepts=[-0.75,-0.75])
+		# ens_out=nengo.Ensemble(n_neurons=n_in,dimensions=1)
+
 		nengo.Connection(stim,ens_in,synapse=None)
 		bionode.connect_to(ens_in.seed,evals=evals,filenames=filenames)
 		nengo.Connection(ens_in.neurons,bionode,synapse=None)
 		nengo.Connection(ens_in,test_lif,synapse=None)
+		# nengo.Connection(bionode,ens_out)
 
 		probe_in=nengo.Probe(ens_in.neurons,'spikes')
 		probe_bio=nengo.Probe(bionode)
 		probe_test=nengo.Probe(test_lif.neurons,'spikes')
+		# probe_out=nengo.Probe(ens_out)
+
 	with nengo.Simulator(model,dt=dt_nengo) as sim:
 		sim.run(t_sim)
 
@@ -131,7 +136,7 @@ def main():
 	sns.set(context='poster')
 	figure1, (ax1,ax2,ax3,ax4) = plt.subplots(4,1,sharex=True)
 	voltages=np.array([bioneuron.nengo_voltages for bioneuron in bionode.biopop]).T
-	voltages[:,1] = voltages[:,1]- 140 #for plotting
+	# voltages[:,1] = voltages[:,1]- 140 #for plotting
 	rasterplot(sim.trange(), sim.data[probe_in],ax=ax1,use_eventplot=True)
 	ax1.set(ylabel='input \nspikes')
 	ax2.plot(sim.trange(),voltages)
@@ -146,7 +151,7 @@ def main():
 	ax4.plot(sim.trange(),xhat,label='bioneuron $\hat{x}(t)$')
 	ax4.plot(sim.trange(),xhat_test,label='LIF $\hat{x}(t)$')
 	ax4.set(xlabel='time (s)', ylabel='decoded \nvalue')
-	ax4.set(xlim=((t_sim/2,t_sim)),ylim=((-1,1)))
+	# ax4.set(xlim=((t_sim/2,t_sim)),ylim=((-1,1)))
 	plt.legend(loc='lower left',prop={'size':11})
 
 	# rasterplot(sim.trange(),spike_train,ax=ax3,use_eventplot=True)
@@ -181,6 +186,12 @@ def main():
 	ax41.plot(0,0,color='k',linestyle='--',label='LIF')
 	ax41.set(xlabel='x',ylabel='firing rate (Hz)',ylim=(0,60))
 	plt.legend(loc='upper center')
+
+	# figure5, ax5 = plt.subplots(1,1)
+	# ax5.plot(sim.trange(),sim.data[probe_out])
+	# ax5.plot(sim.trange(),np.array(bionode.decoded))
+	# ax5.set(xlabel='time',ylabel='ens_out decoded')
+	# figure5.savefig('ens_out.png')
 
 	figure1.savefig('cosyne_plots.png')
 	# figure2.savefig('lif_plots.png')
