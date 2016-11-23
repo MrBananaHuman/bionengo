@@ -79,12 +79,14 @@ def make_spikes_in(P,raw_signal):
 		with nengo.Simulator(opt_model,dt=P['dt']) as opt_sim:
 			opt_sim.run(P['t_sample'])
 			eval_points, activities = nengo.utils.ensemble.tuning_curves(ideal,opt_sim)
+		gains=opt_sim.data[ideal].gain
+		biases=opt_sim.data[ideal].bias
 		signal_in=opt_sim.data[probe_signal]
 		spikes_in=opt_sim.data[probe_in]
 	np.savez(P['directory']+'lifdata.npz',
 			signal_in=signal_in.ravel(),spikes_in=spikes_in,
 			lif_eval_points=eval_points,lif_activities=activities,
-			gains=ideal.gain, biases=ideal.bias)
+			gains=gains, biases=biases)
 	x_test, A_test=nengo.utils.ensemble.tuning_curves(ens_in,opt_sim)
 
 def weight_rescale(location):
@@ -190,7 +192,7 @@ def tuning_curve_loss(P,lif_eval_points,lif_activities,bio_eval_points,bio_activ
 	loss=np.sqrt(np.average((f_bio_rate(X)-f_lif_rate(X))**2))
 	return X,f_bio_rate,f_lif_rate,loss
 
-def export_bioneuron(P,run_id,spike_times,X,f_bio_rate,f_lif_rate,loss):
+def export_bioneuron(P,run_id,spike_times,X,f_bio_rate,f_lif_rate,gain_ideal,bias_ideal,loss):
 	import json
 	import numpy as np
 	import ipdb
@@ -209,6 +211,8 @@ def export_bioneuron(P,run_id,spike_times,X,f_bio_rate,f_lif_rate,loss):
 		'spike_times': spike_times.tolist(),
 		'x_sample': X.tolist(),
 		'A_ideal': f_lif_rate(X).tolist(),
+		'gain_ideal':gain_ideal,
+		'bias_ideal':bias_ideal,
 		'A_actual': f_bio_rate(X).tolist(),
 		'loss': loss,
 		}
@@ -339,6 +343,7 @@ def simulate(P):
 	import os
 	import timeit
 	import gc
+	import ipdb
 
 	start=timeit.default_timer()
 	run_id=make_addon(6)
@@ -348,6 +353,7 @@ def simulate(P):
 	spikes_in=lifdata['spikes_in']
 	lif_eval_points=lifdata['lif_eval_points'].ravel()
 	lif_activities=lifdata['lif_activities'][:,P['bio_idx']]
+	gain_ideal,bias_ideal=lifdata['gains'][P['bio_idx']],lifdata['biases'][P['bio_idx']]
 	bias=P['bias']
 	weights=np.zeros((P['n_in'],P['n_syn']))
 	locations=np.zeros((P['n_in'],P['n_syn']))
@@ -364,7 +370,7 @@ def simulate(P):
 	bio_eval_points, bio_activities = make_tuning_curves(P,signal_in,biorates)	
 	X,f_bio_rate,f_lif_rate,loss=tuning_curve_loss(
 			P,lif_eval_points,lif_activities,bio_eval_points,bio_activities)
-	export_bioneuron(P,run_id,spike_times,X,f_bio_rate,f_lif_rate,loss)
+	export_bioneuron(P,run_id,spike_times,X,f_bio_rate,f_lif_rate,gain_ideal,bias_ideal,loss)
 	del bioneuron
 	gc.collect()
 	stop=timeit.default_timer()
@@ -389,7 +395,7 @@ def optimize_bioneuron(ens_in_seed,n_in,n_bio,n_syn,evals=1000,
 		'evals':evals,
 		'synapse_tau':tau,
 		'synapse_type':synapse_type,
-		't_sample':5.0,
+		't_sample':2.0,
 		'min_in_rate':40,
 		'max_lif_rate':60,
 		'w_0':0.0005,

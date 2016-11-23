@@ -85,7 +85,7 @@ def main():
 	dt_nengo=0.0001
 	dt_neuron=0.0001
 	filenames=None #TODO: bug when t_sim > t_sample and filenames=None
-	filenames='/home/pduggins/bionengo/'+'data/QMEPDX446/'+'filenames.txt'
+	# filenames='/home/pduggins/bionengo/'+'data/QMEPDX446/'+'filenames.txt'
 	# filenames='/home/pduggins/bionengo/'+'data/FMYBKKBPL/'+'filenames.txt' #2 opposing neurons
 	# filenames='/home/pduggins/bionengo/'+'data/LJC9G27PJ/'+'filenames.txt' #2 opposing neurons
 	n_in=50
