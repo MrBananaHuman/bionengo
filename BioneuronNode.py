@@ -95,6 +95,7 @@ class BioneuronNode(nengo.Node):
 		return d
 
 	def step(self,t,x):
+		# ipdb.set_trace()
 		#x is an array, size n_in, of whether input neurons spiked at time=t
 		for n in range(self.n_in):
 			if x[n] > 0:

@@ -85,7 +85,7 @@ def main():
 	dt_nengo=0.0001
 	dt_neuron=0.0001
 	filenames=None #TODO: bug when t_sim > t_sample and filenames=None
-	# filenames='/home/pduggins/bionengo/'+'data/QMEPDX446/'+'filenames.txt'
+	filenames='/home/pduggins/bionengo/'+'data/UJRQGR5ZS/'+'filenames.txt' #with gain, bias
 	# filenames='/home/pduggins/bionengo/'+'data/FMYBKKBPL/'+'filenames.txt' #2 opposing neurons
 	# filenames='/home/pduggins/bionengo/'+'data/LJC9G27PJ/'+'filenames.txt' #2 opposing neurons
 	n_in=50
@@ -143,10 +143,12 @@ def main():
 	# ax2twin=ax2.twinx()
 	# ax2twin.plot(0,0)
 	# ax2twin.plot(sim.trange(),voltages[:,1])
-	ax2.set(ylabel='bioneuron \nvoltage',yticks=([]))
+	ax2.set(ylabel='bioneuron \nvoltage') #,yticks=([])
 	# ax2twin.set(ylim=((-180,40)))
-	rasterplot(sim.trange(),spike_train_test,ax=ax3,use_eventplot=True)
-	ax3.set(ylabel='LIF \nspikes',yticks=([]))
+	# rasterplot(sim.trange(),spike_train_test,ax=ax3,use_eventplot=True)
+	# ax3.set(ylabel='LIF \nspikes',yticks=([]))
+	rasterplot(sim.trange(),spike_train,ax=ax3,use_eventplot=True)
+	ax3.set(ylabel='bioneuron \nspikes',yticks=([]))
 	ax4.plot(sim.trange(),signal(sim.trange()),label='$x(t)$') #color='k',ls='-',
 	ax4.plot(sim.trange(),xhat,label='bioneuron $\hat{x}(t)$')
 	ax4.plot(sim.trange(),xhat_test,label='LIF $\hat{x}(t)$')
@@ -193,7 +195,7 @@ def main():
 	# ax5.set(xlabel='time',ylabel='ens_out decoded')
 	# figure5.savefig('ens_out.png')
 
-	figure1.savefig('cosyne_plots.png')
+	figure1.savefig('bionode_plots.png')
 	# figure2.savefig('lif_plots.png')
 	figure3.savefig('rmse.png')
 	figure4.savefig('tuning_curve_comparison')

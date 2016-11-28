@@ -10,15 +10,13 @@ class BahlNeuron(nengo.neurons.NeuronType):
 	'''compartmental neuron from Bahl et al 2012'''
 
 	probeable=('spikes','voltage')
-	# Bioneuron=namedtuple('Bioneuron',['bioneuron','tau','syn_type',
-	# 									'x_sample','A_ideal',
-	# 									'gain_ideal','bias_ideal','A_actual'])
-	def __init__(self):
+	def __init__(self,filenames=None):
 		super(BahlNeuron,self).__init__()
+		self.filenames=filenames
 
 	class Bahl():
 		def __init__(self):
-			neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc')
+			neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc') #todo
 			self.cell = neuron.h.Bahl()
 			self.synapses = {} #index=input neuron, value=synapses
 			self.vecstim = {} #index=input neuron, value=VecStim object (input spike times)
@@ -39,7 +37,7 @@ class BahlNeuron(nengo.neurons.NeuronType):
 			self.bias = bias
 			self.bias_current = neuron.h.IClamp(self.cell.soma(0.5))
 			self.bias_current.delay = 0
-			self.bias_current.dur = 1e9  # TODO; limits simulation time
+			self.bias_current.dur = 1e9 #todo
 			self.bias_current.amp = self.bias
 
 		def add_connection(self,idx):
@@ -59,27 +57,23 @@ class BahlNeuron(nengo.neurons.NeuronType):
 		self.tau=tau
 		self.syn_type=synapse_type
 		#load attributes of optimized neuron
-		filenames='/home/pduggins/bionengo/'+'data/44VF7AMHU/'+'filenames.txt' #todo: pass arg
-		f=open(filenames,'r')
-		files=json.load(f)
-		for bio_idx in range(len(files)):
-			with open(files[self.bio_idx],'r') as data_file: 
-				bioneuron_info=json.load(data_file)
-			self.A_ideal=bioneuron_info['A_ideal']
-			self.gain_ideal=bioneuron_info['gain_ideal']
-			self.bias_ideal=bioneuron_info['bias_ideal']
-			self.A_actual=bioneuron_info['A_actual']
-			self.x_sample=bioneuron_info['x_sample']
+		f=open(self.filenames,'r')
+		self.my_file=json.load(f)[self.bio_idx]
+		with open(self.my_file,'r') as data_file: 
+			bioneuron_info=json.load(data_file)
+		self.A_ideal=bioneuron_info['A_ideal']
+		self.gain_ideal=bioneuron_info['gain_ideal']
+		self.bias_ideal=bioneuron_info['bias_ideal']
+		self.A_actual=bioneuron_info['A_actual']
+		self.x_sample=bioneuron_info['x_sample']
 		self.bioneuron=None
 		return copy.copy(self)
-		# return self.Bioneuron(bioneuron=self.bioneuron,tau=self.tau,syn_type=self.syn_type,
-		# 						x_sample=self.x_sample,A_ideal=self.A_ideal,
-		# 						gain_ideal=self.gain_ideal,bias_ideal=self.bias_ideal,
-		# 						A_actual=self.A_actual)
 
 	def rates(self, x, gain, bias):
 		"""Use LIFRate to approximate rates given bioneuron's
 		ideal (optimized for) gain and bias."""
+		#only grabs gain and bias from ONE instance of a bioneuron, so fails
+			# - how to pass SimBahlNeuron.cells?
 		J = self.gain_ideal * x + self.bias_ideal
 		out = np.zeros_like(J)
 		LIFRate_instance=nengo.LIFRate() #does this work like I think?
@@ -88,10 +82,12 @@ class BahlNeuron(nengo.neurons.NeuronType):
 		nengo.LIFRate.step_math(LIFRate_instance, dt=1, J=J, output=out)
 		return out
 
-	def gain_bias(self, max_rates, intercepts): #how to remove this without bug?
+	def gain_bias(self, max_rates, intercepts): #how to remove this without error?
+		#only grabs gain and bias from ONE instance of a bioneuron, so fails
+			# - how to pass SimBahlNeuron.cells?
 		return np.ones(len(max_rates)),np.ones(len(max_rates))
 
-	def step_math(self,dt,spiked,cells,voltage,time): #for all neurons
+	def step_math(self,dt,spiked,cells,voltage,time):
 		desired_t=time*1000
 		neuron.run(desired_t)
 		new_spiked=[]
@@ -107,7 +103,6 @@ class BahlNeuron(nengo.neurons.NeuronType):
 			new_voltage.append(volt)
 		spiked[:]=np.array(new_spiked)/dt
 		voltage[:]=np.array(new_voltage)
-		# ipdb.set_trace()
 
 '''
 Builder #############################################################################3
@@ -116,7 +111,7 @@ Builder ########################################################################
 class SimBahlNeuron(Operator):
 	def __init__(self,neurons,output,voltage,states):
 		super(SimBahlNeuron,self).__init__()
-		self.neurons=neurons #what is this used for?
+		self.neurons=neurons
 		self.output=output
 		self.voltage=voltage
 		self.time=states[0]
@@ -124,7 +119,6 @@ class SimBahlNeuron(Operator):
 		self.sets=[output,voltage]
 		self.updates=[]
 		self.incs=[]
-		self.conn_files=[]
 		self.cells=[self.neurons.create(i) for i in range(output.shape[0])]
 		self.dt_neuron=0.0001*1000 #todo - pass as argument
 		neuron.h.dt = self.dt_neuron
@@ -156,13 +150,15 @@ class TransmitSpikes(Operator):
 		time=signals[self.time]
 		def step():
 			for n in range(spikes.shape[0]): #for each input neuron
-				if spikes[n] > 0:
+				if spikes[n] > 0: #if this neuron spiked at this time, then
 					for cell in self.cells: #for each bioneuron
 						for syn in cell.bioneuron.synapses[n]: #for each synapse conn. to input
 							syn.spike_in.event(1.0*time*1000) #add a spike at time t (ms)
 		return step
 
 
+# from weakref import WeakKeyDictionary
+# ens_to_cells = WeakKeyDictionary()
 @Builder.register(BahlNeuron)
 def build_bahlneuron(model,neuron_type,ens):
 	model.sig[ens]['voltage'] = Signal(np.zeros(ens.ensemble.n_neurons),
@@ -170,15 +166,13 @@ def build_bahlneuron(model,neuron_type,ens):
 	op=SimBahlNeuron(neurons=neuron_type,
 						output=model.sig[ens]['out'],voltage=model.sig[ens]['voltage'],
 						states=[model.time])
+	# ens_to_cells[ens.ensemble] = op.cells
 	model.add_op(op)
-
 
 @Builder.register(nengo.Ensemble)
 def build_ensemble(model,ens):
 	nengo.builder.ensemble.build_ensemble(model,ens)
 
-
-from optimize_bioneuron import optimize_bioneuron
 @Builder.register(nengo.Connection)
 def build_connection(model,conn):
 	use_nrn = (
@@ -186,31 +180,30 @@ def build_connection(model,conn):
 		isinstance(conn.post.neuron_type, BahlNeuron))
 	if use_nrn: #bioneuron connection
 		rng = np.random.RandomState(model.seeds[conn])
-		model.sig[conn]['in']=model.sig[conn.pre]['out'] #how to input spikes?
+		model.sig[conn]['in']=model.sig[conn.pre]['out']
 		#how to pass these arguments?
 		n_in=conn.pre.n_neurons
 		ens_in_seed=conn.pre.seed
 		n_bio=conn.post.n_neurons
 		n_syn=5
-		evals=1000
+		evals=10
 		dt_neuron=0.0001
 		dt_nengo=0.001
 		tau=0.01
 		synapse_type='ExpSyn'
-		filenames='/home/pduggins/bionengo/'+'data/44VF7AMHU/'+'filenames.txt'
+		sim_bahl_op=model.operators[7] 			#how to grab model SimBahlNeuron operators? 
 
-		# if filenames == None: #todo: input conn.pre, make sample neurons identical
-		# 	filenames=optimize_bioneuron(ens_in_seed,n_in,n_bio,n_syn,
-		# 								evals,dt_neuron,dt_nengo,tau,syn_type)
+		if sim_bahl_op.cells[0].my_file == None: #todo: input conn.pre, make sample neurons identical
+			from optimize_bioneuron import optimize_bioneuron
+			ipdb.set_trace()
+			filenames=optimize_bioneuron(ens_in_seed,n_in,n_bio,n_syn,
+										evals,dt_neuron,dt_nengo,tau,syn_type)
 
-		def load_weights(filenames,sim_bahl_op):
-			import json
+		def load_weights(sim_bahl_op):
 			import copy
-			f=open(filenames,'r')
-			sim_bahl_op.conn_files=json.load(f)
-			for bio_idx in range(n_bio): #for each bioneuron
+			for j in range(n_bio): #for each bioneuron
 				bioneuron=BahlNeuron.Bahl() #todo: less deep
-				with open(sim_bahl_op.conn_files[bio_idx],'r') as data_file: 
+				with open(sim_bahl_op.cells[j].my_file,'r') as data_file:
 					bioneuron_info=json.load(data_file)
 				n_inputs=len(np.array(bioneuron_info['weights']))
 				n_synapses=len(np.array(bioneuron_info['weights'])[0])
@@ -222,21 +215,43 @@ def build_connection(model,conn):
 						weight=np.array(bioneuron_info['weights'])[n][i]
 						bioneuron.add_synapse(n,sim_bahl_op.cells[0].syn_type,section,
 												weight,sim_bahl_op.cells[0].tau,None)
-				bioneuron.start_recording() #NEURON method
-				sim_bahl_op.cells[bio_idx].bioneuron=bioneuron
+				bioneuron.start_recording()
+				sim_bahl_op.cells[j].bioneuron=bioneuron
 
-		sim_bahl_op=model.operators[7] 			#how to grab model SimBahlNeuron operators? 
-		load_weights(filenames,sim_bahl_op) 	#load weights into these operators
+		load_weights(sim_bahl_op) 	#load weights into these operators
 		model.add_op(TransmitSpikes(model.sig[conn]['in'],sim_bahl_op,states=[model.time]))
-		# from nengo.builder.connection import build_linear_system
-		# eval_points, activities, targets = build_linear_system(
-		#     model, conn, rng=rng)
-		# # account for transform
-		# from nengo.utils.builder import full_transform
-		# transform = full_transform(conn)
-		# targets = np.dot(targets, transform.T)
-		# weights, solver_info = conn.solver(
-		# 	activities, targets)
-			# rng=rng, E=model.params[conn.post].scaled_encoders.T)
+
 	else: #normal connection
 		return nengo.builder.connection.build_connection(model, conn)
+
+class CustomSolver(nengo.solvers.Solver):
+	import json
+	def __init__(self,filenames):
+		self.filenames=filenames
+		self.weights=False #decoders not weights
+		if self.filenames==None: #do the same optimization as in build_connection()
+			#self.filenames='''call optimize bioneuron '''
+		#grab eval points and activities from optimization
+		f=open(self.filenames,'r')
+		files=json.load(f)
+		self.A_ideal=[]
+		self.A_actual=[]
+		self.gain_ideal=[]
+		self.bias_ideal=[]
+		self.x_sample=[]
+		for bio_idx in range(len(files)):
+			with open(files[bio_idx],'r') as data_file: 
+				bioneuron_info=json.load(data_file)
+			self.A_ideal.append(bioneuron_info['A_ideal'])
+			self.A_actual.append(bioneuron_info['A_actual'])
+			self.gain_ideal.append(bioneuron_info['gain_ideal'])
+			self.bias_ideal.append(bioneuron_info['bias_ideal'])
+			self.x_sample.append(bioneuron_info['x_sample'])
+		
+		self.solver=nengo.solvers.LstsqL2()
+		self.decoders,self.info=self.solver(
+									np.array(self.A_actual).T,
+									np.array(self.x_sample)[0])
+		self.decoders=(np.ones((1,len(files)))*self.decoders).T
+	def __call__(self,A,Y,rng=None,E=None): #function that gets called by the builder
+		return self.decoders, dict()
