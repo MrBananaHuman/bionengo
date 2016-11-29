@@ -7,8 +7,8 @@ import os
 class Bahl():
     
     def __init__(self):
-        # neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc')
-        neuron.h.load_file('/home/psipeter/bionengo/bahl.hoc')
+        neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc')
+        # neuron.h.load_file('/home/psipeter/bionengo/bahl.hoc')
         self.cell = neuron.h.Bahl()
         self.synapses = {} #index=input neuron, value=synapses
         self.vecstim = {} #index=input neuron, value=VecStim object (input spike times)

@@ -66,18 +66,18 @@ def make_spikes_in(P,raw_signal):
 	while np.sum(spikes_in)==0: #rerun nengo spike generator until it returns something
 		with nengo.Network() as opt_model:
 			signal = nengo.Node(lambda t: raw_signal[:,int(t/P['dt'])]) #all dim, index at t
-			ideal = nengo.Ensemble(P['n_bio'],dimensions=P['dim'],
-							max_rates=nengo.dists.Uniform(P['min_in_rate'],P['max_lif_rate']))
-			# ideal = nengo.Ensemble(n_neurons=2,dimensions=1,
-			# 						encoders=[[1],[-1]],
-			# 						max_rates=[60,60],
-			# 						intercepts=[-0.75,-0.75])
-			ens_in = nengo.Ensemble(n_neurons=P['n_in'],
+			pre = nengo.Ensemble(n_neurons=P['n_in'],
 									dimensions=P['dim'],
 									seed=P['ens_in_seed'])
-			nengo.Connection(signal,ens_in,synapse=None)
+			ideal = nengo.Ensemble(n_neurons=P['n_bio'],
+									dimensions=P['dim'],
+									max_rates=nengo.dists.Uniform(P['min_ideal_rate'],P['max_ideal_rate']),
+									neuron_type=nengo.neurons.LIF())
+			nengo.Connection(signal,pre,synapse=None)
+			nengo.Connection(pre,ideal,synapse=None)
 			probe_signal = nengo.Probe(signal)
-			probe_in = nengo.Probe(ens_in.neurons,'spikes')
+			probe_pre = nengo.Probe(pre.neurons,'spikes')
+			probe_ideal = nengo.Probe(ideal.neurons,'spikes')
 		with nengo.Simulator(opt_model,dt=P['dt']) as opt_sim:
 			opt_sim.run(P['t_sample'])
 			# eval_points, activities = nengo.utils.ensemble.tuning_curves(ideal,opt_sim)
@@ -85,30 +85,21 @@ def make_spikes_in(P,raw_signal):
 		biases=opt_sim.data[ideal].bias
 		encoders=opt_sim.data[ideal].encoders
 		signal_in=opt_sim.data[probe_signal]
-		spikes_in=opt_sim.data[probe_in]
-		#for weight optimization, need to define an ideal 1D response curve.
-		#x(t) in N dim dotted with an ideal neuron's N dim encoder gives 1D x-axis
-		#activity defined by a_i(t) = alpha_i * x(t) dot e_i + beta_i
-		#subject to sampling bias, could be improved with Aaron's methods
-		eval_points=np.dot(signal_in,encoders.T)
-		activities=np.array([nengo.neurons.LIFRate().rates(eval_points[:,n],
-								gain=gains[n],bias=biases[n]) 
-								for n in range(ideal.n_neurons)]).T
-		# ipdb.set_trace()
-		# activities=gains*eval_points+biases #put through LIF 
-		# ipdb.set_trace()
+		spikes_in=opt_sim.data[probe_pre]
+		spikes_ideal=opt_sim.data[probe_ideal]
+
 	np.savez(P['directory']+'lifdata.npz',
-			signal_in=signal_in,spikes_in=spikes_in,
-			gains=gains, biases=biases, encoders=encoders,
-			lif_eval_points=eval_points,lif_activities=activities)
+			signal_in=signal_in,spikes_in=spikes_in,spikes_ideal=spikes_ideal,
+			gains=gains, biases=biases, encoders=encoders)
+			# ideal_eval_points=eval_points,ideal_activities=activities)
 
 def weight_rescale(location):
 	#interpolation
 	import numpy as np
 	from scipy.interpolate import interp1d
 	#load voltage attenuation data for bahl.hoc
-	# voltage_attenuation=np.load('/home/pduggins/bionengo/'+'voltage_attenuation.npz')
-	voltage_attenuation=np.load('/home/psipeter/bionengo/'+'voltage_attenuation.npz')
+	voltage_attenuation=np.load('/home/pduggins/bionengo/'+'voltage_attenuation.npz')
+	# voltage_attenuation=np.load('/home/psipeter/bionengo/'+'voltage_attenuation.npz')
 	f_voltage_att = interp1d(voltage_attenuation['distances'],voltage_attenuation['voltages'])
 	scaled_weight=1.0/f_voltage_att(location)
 	return scaled_weight
@@ -178,75 +169,92 @@ def get_rates(P,spikes):
 		rates = np.convolve(kernel, interp, mode='full')[:len(timesteps)]
 	return spike_train, rates
 
-
-def make_tuning_curves(P,signal_in,encoders_ideal,biorates):
+def rate_loss(bio_rates,ideal_rates):
 	import numpy as np
-	import ipdb
-	# X=np.arange(-1.0,1.0,P['dx']) #eval points in X
-	#generate 1d evaluation points by dotting N dim signal with N dim ideal encoders
-	min_x_dot_e=np.min(np.dot(signal_in,encoders_ideal.T))
-	max_x_dot_e=np.max(np.dot(signal_in,encoders_ideal.T))
-	X=np.arange(min_x_dot_e,max_x_dot_e,P['dx'])
-	Hz=np.zeros_like(X) #firing rate for each eval point
-	timesteps=np.arange(0,P['t_sample'],P['dt'])
-	for xi in range(len(X)-1):
-		ts_greater=np.where(X[xi] < signal_in)[0]
-		ts_smaller=np.where(signal_in < X[xi+1])[0]
-		ts=np.intersect1d(ts_greater,ts_smaller)
-		if ts.shape[0]>0: Hz[xi]=np.average(biorates[ts])
-	return X, Hz
+	loss=np.sqrt(np.average((bio_rates-ideal_rates)**2))
+	return loss
+
+# def make_tuning_curves(P,signal_in,encoders_ideal,biorates):
+# 	import numpy as np
+# 	import ipdb
+# 	# X=np.arange(-1.0,1.0,P['dx']) #eval points in X
+# 	#generate 1d evaluation points by dotting N dim signal with N dim ideal encoders
+# 	min_x_dot_e=np.min(np.dot(signal_in,encoders_ideal.T))
+# 	max_x_dot_e=np.max(np.dot(signal_in,encoders_ideal.T))
+# 	X=np.arange(min_x_dot_e,max_x_dot_e,P['dx'])
+# 	Hz=np.zeros_like(X) #firing rate for each eval point
+# 	timesteps=np.arange(0,P['t_sample'],P['dt'])
+# 	for xi in range(len(X)-1):
+# 		ts_greater=np.where(X[xi] < signal_in)[0]
+# 		ts_smaller=np.where(signal_in < X[xi+1])[0]
+# 		ts=np.intersect1d(ts_greater,ts_smaller)
+# 		if ts.shape[0]>0: Hz[xi]=np.average(biorates[ts])
+# 	return X, Hz
 
 
-def tuning_curve_loss(P,lif_eval_points,lif_activities,bio_eval_points,bio_activities):
-	import numpy as np
-	import ipdb
-	#shape of activities and Hz may be mismatched,
-	#so interpolate and slice activities for comparison
-	from scipy.interpolate import interp1d
-	f_bio_rate = interp1d(bio_eval_points,bio_activities)
-	f_lif_rate = interp1d(lif_eval_points,lif_activities)
-	x_min=np.trunc(np.maximum(np.min(bio_eval_points),np.min(lif_eval_points)))
-	x_max=np.trunc(np.minimum(np.max(bio_eval_points),np.max(lif_eval_points)))
-	X=np.arange(x_min,x_max,P['dx']) #todo: why is truncation needed when using pathos?
-	# print 'min bio eval', np.min(bio_eval_points)
-	# print 'max bio eval', np.max(bio_eval_points)
-	# print 'min lif eval', np.min(lif_eval_points)
-	# print 'max lif eval', np.max(lif_eval_points)
-	# print 'x_min', np.min(X) 
-	# print 'x max', np.max(X)
-	# ipdb.set_trace()
-	loss=np.sqrt(np.average((f_bio_rate(X)-f_lif_rate(X))**2))
-	return X,f_bio_rate,f_lif_rate,loss
+# def tuning_curve_loss(P,lif_eval_points,lif_activities,bio_eval_points,bio_activities):
+# 	import numpy as np
+# 	import ipdb
+# 	#shape of activities and Hz may be mismatched,
+# 	#so interpolate and slice activities for comparison
+# 	from scipy.interpolate import interp1d
+# 	f_bio_rate = interp1d(bio_eval_points,bio_activities)
+# 	f_lif_rate = interp1d(lif_eval_points,lif_activities)
+# 	x_min=np.maximum(np.min(bio_eval_points),np.min(lif_eval_points))
+# 	x_max=np.minimum(np.max(bio_eval_points),np.max(lif_eval_points))
+# 	#todo: generalize -1.0 to radius
+# 	assert x_min < -1.0, "x_min=%s don't extend to radius, interpolation fail" %x_min
+# 	assert x_max > 1.0, "x_max=%s don't extend to radius, interpolation fail" %xmax
+# 	X=np.arange(-1.0,1.0,P['dx'])
+# 	# X=np.arange(x_min,x_max,P['dx'])
+# 	loss=np.sqrt(np.average((f_bio_rate(X)-f_lif_rate(X))**2))
+# 	return X,f_bio_rate,f_lif_rate,loss
 
-
-def export_bioneuron(P,run_id,spike_times,X,f_bio_rate,f_lif_rate,
-						gain_ideal,bias_ideal,encoders_ideal,loss):
+def export_bioneuron(P,run_id,bias,weights,locations,signal_in,bio_rates,loss):
 	import json
-	import numpy as np
-	import ipdb
-	bias=P['bias']
-	weights=np.zeros((P['n_in'],P['n_syn']))
-	locations=np.zeros((P['n_in'],P['n_syn']))
-	for n in range(P['n_in']):
-		for i in range(P['n_syn']):
-			weights[n][i]=P['weights']['%s_%s'%(n,i)]
-			locations[n][i]=P['locations']['%s_%s'%(n,i)]
 	to_export={
 		'bio_idx':P['bio_idx'],
 		'weights':weights.tolist(),
 		'locations': locations.tolist(),
 		'bias': bias,
-		'gain_ideal':gain_ideal,
-		'bias_ideal':bias_ideal,
-		'encoders_ideal':encoders_ideal.tolist(),
-		'x_sample': X.tolist(),
-		'spike_times': spike_times.tolist(),
-		'A_ideal': f_lif_rate(X).tolist(),
-		'A_actual': f_bio_rate(X).tolist(),
+		# 'gain_ideal':gain_ideal,
+		# 'bias_ideal':bias_ideal,
+		# 'encoders_ideal':encoders_ideal.tolist(),
+		'signal_in': signal_in.tolist(),
+		'bio_rates': bio_rates.tolist(),
 		'loss': loss,
 		}
 	with open(run_id+'_bioneuron_%s.json'%P['bio_idx'], 'w') as data_file:
 		json.dump(to_export, data_file)
+
+# def export_bioneuron(P,run_id,spike_times,X,f_bio_rate,f_lif_rate,
+# 						gain_ideal,bias_ideal,encoders_ideal,loss):
+# 	import json
+# 	import numpy as np
+# 	import ipdb
+# 	bias=P['bias']
+# 	weights=np.zeros((P['n_in'],P['n_syn']))
+# 	locations=np.zeros((P['n_in'],P['n_syn']))
+# 	for n in range(P['n_in']):
+# 		for i in range(P['n_syn']):
+# 			weights[n][i]=P['weights']['%s_%s'%(n,i)]
+# 			locations[n][i]=P['locations']['%s_%s'%(n,i)]
+# 	to_export={
+# 		'bio_idx':P['bio_idx'],
+# 		'weights':weights.tolist(),
+# 		'locations': locations.tolist(),
+# 		'bias': bias,
+# 		'gain_ideal':gain_ideal,
+# 		'bias_ideal':bias_ideal,
+# 		'encoders_ideal':encoders_ideal.tolist(),
+# 		'x_sample': X.tolist(),
+# 		'spike_times': spike_times.tolist(),
+# 		'A_ideal': f_lif_rate(X).tolist(),
+# 		'A_actual': f_bio_rate(X).tolist(),
+# 		'loss': loss,
+# 		}
+# 	with open(run_id+'_bioneuron_%s.json'%P['bio_idx'], 'w') as data_file:
+# 		json.dump(to_export, data_file)
 
 def get_min_loss_filename(P,trials):
 	import numpy as np
@@ -380,11 +388,12 @@ def simulate(P):
 	lifdata=np.load(P['directory']+'lifdata.npz')
 	signal_in=lifdata['signal_in']
 	spikes_in=lifdata['spikes_in']
-	lif_eval_points=lifdata['lif_eval_points'][:,P['bio_idx']]
-	lif_activities=lifdata['lif_activities'][:,P['bio_idx']]
-	gain_ideal=lifdata['gains'][P['bio_idx']]
-	bias_ideal=lifdata['biases'][P['bio_idx']]
-	encoders_ideal=lifdata['encoders'][P['bio_idx']]
+	spikes_ideal=lifdata['spikes_ideal']
+	# lif_eval_points=lifdata['lif_eval_points'][:,P['bio_idx']]
+	# lif_activities=lifdata['lif_activities'][:,P['bio_idx']]
+	# gain_ideal=lifdata['gains'][P['bio_idx']]
+	# bias_ideal=lifdata['biases'][P['bio_idx']]
+	# encoders_ideal=lifdata['encoders'][P['bio_idx']]
 	bias=P['bias']
 	weights=np.zeros((P['n_in'],P['n_syn']))
 	locations=np.zeros((P['n_in'],P['n_syn']))
@@ -392,17 +401,16 @@ def simulate(P):
 		for i in range(P['n_syn']):
 			weights[n][i]=P['weights']['%s_%s'%(n,i)]
 			locations[n][i]=P['locations']['%s_%s'%(n,i)]
+
 	bioneuron = make_bioneuron(P,weights,locations,bias)
 	connect_bioneuron(P,spikes_in,bioneuron)
-
 	run_bioneuron(P)
-	spike_times=np.round(np.array(bioneuron.spikes),decimals=3)
-	biospikes, biorates=get_rates(P,spike_times)
-	bio_eval_points, bio_activities = make_tuning_curves(P,signal_in,encoders_ideal,biorates)	
-	X,f_bio_rate,f_lif_rate,loss=tuning_curve_loss(
-			P,lif_eval_points,lif_activities,bio_eval_points,bio_activities)
-	export_bioneuron(P,run_id,spike_times,X,f_bio_rate,f_lif_rate,
-			gain_ideal,bias_ideal,encoders_ideal,loss)
+	
+	bio_spikes, bio_rates=get_rates(P,np.round(np.array(bioneuron.spikes),decimals=3))
+	ideal_spikes, ideal_rates=get_rates(P,spikes_ideal)
+	loss = rate_loss(bio_rates,ideal_rates)
+	export_bioneuron(P,run_id,bias,weights,locations,signal_in,bio_rates,loss)
+
 	del bioneuron
 	gc.collect()
 	stop=timeit.default_timer()
@@ -428,9 +436,9 @@ def optimize_bioneuron(ens_in_seed,n_in,n_bio,n_syn,dim,
 		'evals':evals,
 		'synapse_tau':tau,
 		'synapse_type':synapse_type,
-		't_sample':0.20,
-		'min_in_rate':40,
-		'max_lif_rate':60,
+		't_sample':3.0,
+		'min_ideal_rate':40,
+		'max_ideal_rate':60,
 		'w_0':0.0005,
 		'bias_min':-3.0,
 		'bias_max':3.0,
