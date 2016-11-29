@@ -16,7 +16,8 @@ class BahlNeuron(nengo.neurons.NeuronType):
 
 	class Bahl():
 		def __init__(self):
-			neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc') #todo
+			neuron.h.load_file('/home/psipeter/bionengo/bahl.hoc') #todo
+			# neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc') #todo
 			self.cell = neuron.h.Bahl()
 			self.synapses = {} #index=input neuron, value=synapses
 			self.vecstim = {} #index=input neuron, value=VecStim object (input spike times)
@@ -57,15 +58,25 @@ class BahlNeuron(nengo.neurons.NeuronType):
 		self.tau=tau
 		self.syn_type=synapse_type
 		#load attributes of optimized neuron
-		f=open(self.filenames,'r')
-		self.my_file=json.load(f)[self.bio_idx]
-		with open(self.my_file,'r') as data_file: 
-			bioneuron_info=json.load(data_file)
-		self.A_ideal=bioneuron_info['A_ideal']
-		self.gain_ideal=bioneuron_info['gain_ideal']
-		self.bias_ideal=bioneuron_info['bias_ideal']
-		self.A_actual=bioneuron_info['A_actual']
-		self.x_sample=bioneuron_info['x_sample']
+		if self.filenames is not None:
+			f=open(self.filenames,'r')
+			self.my_file=json.load(f)[self.bio_idx]
+			with open(self.my_file,'r') as data_file: 
+				bioneuron_info=json.load(data_file)
+			self.A_ideal=bioneuron_info['A_ideal']
+			self.gain_ideal=bioneuron_info['gain_ideal']
+			self.bias_ideal=bioneuron_info['bias_ideal']
+			self.encoders_ideal=bioneuron_info['encoders_ideal']
+			self.A_actual=bioneuron_info['A_actual']
+			self.x_sample=bioneuron_info['x_sample']
+		else:
+			self.my_file=None
+			self.A_ideal=None
+			self.gain_ideal=None
+			self.bias_ideal=None
+			self.encoders_ideal=None
+			self.A_actual=None
+			self.x_sample=None
 		self.bioneuron=None
 		return copy.copy(self)
 
@@ -186,18 +197,22 @@ def build_connection(model,conn):
 		ens_in_seed=conn.pre.seed
 		n_bio=conn.post.n_neurons
 		n_syn=5
+		dim=2
 		evals=10
 		dt_neuron=0.0001
 		dt_nengo=0.001
 		tau=0.01
-		synapse_type='ExpSyn'
+		syn_type='ExpSyn'
 		sim_bahl_op=model.operators[7] 			#how to grab model SimBahlNeuron operators? 
 
-		if sim_bahl_op.cells[0].my_file == None: #todo: input conn.pre, make sample neurons identical
+		if sim_bahl_op.cells[0].my_file == None: 
 			from optimize_bioneuron import optimize_bioneuron
-			ipdb.set_trace()
-			filenames=optimize_bioneuron(ens_in_seed,n_in,n_bio,n_syn,
+			#todo: input conn.pre, make sample neurons identical
+			sim_bahl_op.neurons.filenames=optimize_bioneuron(
+										ens_in_seed,n_in,n_bio,n_syn,dim,
 										evals,dt_neuron,dt_nengo,tau,syn_type)
+			#recreate SimBahlNeurons operator's bioneurons with optimized params (gain etc)
+			sim_bahl_op.cells=[sim_bahl_op.neurons.create(i) for i in range(n_bio)]
 
 		def load_weights(sim_bahl_op):
 			import copy
@@ -230,6 +245,7 @@ class CustomSolver(nengo.solvers.Solver):
 		self.filenames=filenames
 		self.weights=False #decoders not weights
 		if self.filenames==None: #do the same optimization as in build_connection()
+			print self.filenames
 			#self.filenames='''call optimize bioneuron '''
 		#grab eval points and activities from optimization
 		f=open(self.filenames,'r')
@@ -247,7 +263,7 @@ class CustomSolver(nengo.solvers.Solver):
 			self.gain_ideal.append(bioneuron_info['gain_ideal'])
 			self.bias_ideal.append(bioneuron_info['bias_ideal'])
 			self.x_sample.append(bioneuron_info['x_sample'])
-		
+		# ipdb.set_trace()
 		self.solver=nengo.solvers.LstsqL2()
 		self.decoders,self.info=self.solver(
 									np.array(self.A_actual).T,

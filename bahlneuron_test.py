@@ -7,8 +7,8 @@ from nengo.utils.matplotlib import rasterplot
 import ipdb
 import json
 
-def signal(t):
-	return np.sin(t*2*np.pi/(1.0/6))
+def signal(t,dim):
+	return [np.sin((t+dim)*2*np.pi/(1.0/6)) for dim in range(dim)]
 	# return t
 
 def rate_decoders_opt(filenames):
@@ -37,35 +37,37 @@ def main():
 	dt_nengo=0.001
 	dt_neuron=0.0001
 	filenames=None #TODO: bug when t_sim > t_sample and filenames=None
-	# filenames='/home/pduggins/bionengo/'+'data/QMEPDX446/'+'filenames.txt'
+	# filenames='/home/psipeter/bionengo/data/UJRQGR5ZS/filenames.txt' #with gain, bias
 	# filenames='/home/pduggins/bionengo/'+'data/UJRQGR5ZS/'+'filenames.txt' #with gain, bias
 	n_in=50
-	n_bio=10
+	n_bio=4
 	n_syn=5
-	evals=3000
+	dim=2
+	evals=2
 	t_sim=1.0
 	kernel_type='gaussian'
 	tau_filter=0.01 #0.01, 0.2
 
 	with nengo.Network() as model:
-		stim=nengo.Node(output=lambda t: signal(t))
-		ens_in=nengo.Ensemble(n_neurons=n_in,dimensions=1,seed=333)
-		ens_bio=nengo.Ensemble(n_neurons=n_bio,dimensions=1,
+		stim=nengo.Node(output=lambda t: signal(t,dim))
+		ens_in=nengo.Ensemble(n_neurons=n_in,dimensions=dim,seed=333)
+		ens_bio=nengo.Ensemble(n_neurons=n_bio,dimensions=dim,
 								neuron_type=BahlNeuron(filenames),label='ens_bio')
-		test_lif=nengo.Ensemble(n_neurons=n_bio,dimensions=1,
+		test_lif=nengo.Ensemble(n_neurons=n_bio,dimensions=dim,
 								neuron_type=nengo.LIF(),max_rates=nengo.dists.Uniform(40,60))
-		ens_out=nengo.Ensemble(n_neurons=n_in,dimensions=1)
-		test_out=nengo.Ensemble(n_neurons=n_in,dimensions=1)
+		ens_out=nengo.Ensemble(n_neurons=n_in,dimensions=dim)
+		test_out=nengo.Ensemble(n_neurons=n_in,dimensions=dim)
 
 		nengo.Connection(stim,ens_in,synapse=None)
 		nengo.Connection(ens_in,ens_bio,synapse=0.01)
 		nengo.Connection(ens_in,test_lif,synapse=0.01)
+		#need to pass filenames around properly
 		# nengo.Connection(ens_bio.neurons,ens_out,
 		# 						transform=np.ones((1,n_bio))*rate_decoders_opt(filenames),
 		# 						synapse=0.01)
-		nengo.Connection(ens_bio,ens_out,
-								solver=CustomSolver(filenames),
-								synapse=0.01)
+		# nengo.Connection(ens_bio,ens_out,
+		# 						solver=CustomSolver(filenames),
+		# 						synapse=0.01)
 		nengo.Connection(test_lif,test_out)
 
 		probe_in=nengo.Probe(ens_in.neurons,'spikes')
@@ -80,6 +82,7 @@ def main():
 	with nengo.Simulator(model,dt=dt_nengo) as sim:
 		sim.run(t_sim)
 
+
 	sns.set(context='poster')
 	figure1, (ax1,ax2,ax3,ax4,ax5) = plt.subplots(5,1,sharex=True)
 	rasterplot(sim.trange(), sim.data[probe_in],ax=ax1,use_eventplot=True)
@@ -90,16 +93,40 @@ def main():
 	# ax3.set(ylabel='bioneuron \nspikes',yticks=([]))
 	rasterplot(sim.trange(),sim.data[probe_lif_spikes],ax=ax3,use_eventplot=True)
 	ax3.set(ylabel='lif \nspikes',yticks=([]))
-	ax4.plot(sim.trange(),signal(sim.trange()),label='$x(t)$') #color='k',ls='-',
+	ax4.plot(sim.trange(),np.array(signal(sim.trange(),dim)).T,label='$x(t)$') #color='k',ls='-',
 	ax4.plot(sim.trange(),sim.data[probe_bio],label='bioneuron $\hat{x}(t)$')
 	ax4.plot(sim.trange(),sim.data[probe_test],label='LIF $\hat{x}(t)$')
 	ax4.set(ylabel='decoded \nens')
-	ax5.plot(sim.trange(),signal(sim.trange()),label='$x(t)$') #color='k',ls='-',
+	ax5.plot(sim.trange(),np.array(signal(sim.trange(),dim)).T,label='$x(t)$') #color='k',ls='-',
 	ax5.plot(sim.trange(),sim.data[probe_out],label='bioneuron $\hat{x}(t)$ ')
 	ax5.plot(sim.trange(),sim.data[probe_test_out],label='LIF $\hat{x}(t)$')
 	ax5.set(xlabel='time (s)',ylabel='decoded \nens_out')
 	plt.legend(loc='lower left')
 	figure1.savefig('bioneuron_plots.png')
+
+	solver=CustomSolver(ens_bio.neuron_type.filenames)
+	x_sample=np.array(solver.x_sample)
+	A_ideal=np.array(solver.A_ideal).T
+	A_actual=np.array(solver.A_actual).T
+	xhat_sample=np.array(np.dot(A_ideal,solver.decoders))
+
+	figure2, ax2=plt.subplots(1,1)
+	ax2.plot(x_sample[0,:-2],x_sample[0,:-2])
+	ax2.plot(x_sample[0,:-2],xhat_sample[:-2])
+	ax2.set(xlabel='$x$',ylabel='$\hat{x}$',title='RMSE=%s'
+		%np.sqrt(np.average((x_sample[0,:-2]-xhat_sample[:-2])**2)))
+	figure2.savefig('rmse.png')
+
+	figure3, ax3 = plt.subplots(1, 1)
+	for bio_idx in range(n_bio):
+		lifplot=ax3.plot(x_sample[bio_idx,:-2],A_ideal[:,bio_idx][:-2],linestyle='--')
+		bioplot=ax3.plot(x_sample[bio_idx,:-2],A_actual[:,bio_idx][:-2],linestyle='-',
+							color=lifplot[0].get_color())
+	ax3.plot(0,0,color='k',linestyle='-',label='bioneuron')
+	ax3.plot(0,0,color='k',linestyle='--',label='LIF')
+	ax3.set(xlabel='x',ylabel='firing rate (Hz)',ylim=(0,60))
+	plt.legend(loc='upper center')
+	figure3.savefig('response_curve_comparison.png')
 
 if __name__=='__main__':
 	main()
