@@ -1,6 +1,6 @@
 import nengo
 import numpy as np
-from BahlNeuron import BahlNeuron#, CustomSolver
+from BahlNeuron import BahlNeuron, CustomSolver
 import matplotlib.pyplot as plt
 import seaborn as sns
 from nengo.utils.matplotlib import rasterplot
@@ -9,63 +9,60 @@ import json
 
 def signal(t,dim):
 	return [np.sin((t+d**2*np.pi/(2.0/6))*2*np.pi/(1.0/6)) for d in range(dim)]
-	# return t
-
-# def rate_decoders_opt(filenames):
-# 	f=open(filenames,'r')
-# 	files=json.load(f)
-# 	A_ideal=[]
-# 	A_actual=[]
-# 	gain_ideal=[]
-# 	bias_ideal=[]
-# 	x_sample=[]
-# 	for bio_idx in range(len(files)):
-# 		with open(files[bio_idx],'r') as data_file: 
-# 			bioneuron_info=json.load(data_file)
-# 		A_ideal.append(bioneuron_info['A_ideal'])
-# 		A_actual.append(bioneuron_info['A_actual'])
-# 		gain_ideal.append(bioneuron_info['gain_ideal'])
-# 		bias_ideal.append(bioneuron_info['bias_ideal'])
-# 		x_sample.append(bioneuron_info['x_sample'])
-	
-# 	solver=nengo.solvers.LstsqL2()
-# 	decoders,info=solver(np.array(A_actual).T,np.array(x_sample)[0])
-# 	# decoders,info=solver(np.array(A_ideal).T,np.array(x_sample)[0])
-# 	return decoders
 
 def main():
-	dt_nengo=0.001
-	dt_neuron=0.0001
-	filenames=None #TODO: bug when t_sim > t_sample and filenames=None
-	# filenames='/home/psipeter/bionengo/data/UJRQGR5ZS/filenames.txt' #with gain, bias
-	# filenames='/home/pduggins/bionengo/'+'data/U41GEJX4F/'+'filenames.txt' #with gain, bias
-	n_in=50
-	n_bio=10
-	n_syn=5
-	dim=2
-	evals=100
-	t_sim=1.0
-	kernel_type='gaussian'
-	tau_filter=0.01 #0.01, 0.2
+	P={
+		'dt_nengo':0.001,
+		'dt_neuron':0.0001,
+		'filenames':None, #todo: bug when t_sim > t_sample and filenames=None
+		# 'filenames':'/home/psipeter/bionengo/data/UJRQGR5ZS/filenames.txt', #with gain, bias
+		# 'filenames':'/home/pduggins/bionengo/'+'data/U41GEJX4F/'+'filenames.txt', #with gain, bias
+		'n_in':50,
+		'n_bio':10,
+		'n_syn':5,
+		'dim':2,
+		'ens_in_seed':333,
+		'n_eval_points':3333,
+		't_sim':1.0,
+
+		'kernel_type':'gaussian',
+		'tau_filter':0.01, #0.01, 0.2
+		'min_ideal_rate':40,
+		'max_ideal_rate':60,
+		'signal': #for optimization and decoder calculation
+			{'type':'equalpower','max_freq':15.0,'mean':0.0,'std':1.0},
+		'kernel': #for smoothing spikes to calculate A matrix
+			#{'type':'exp','tau':0.02},
+			{'type':'gauss','sigma':0.01,},
+		'synapse_tau':0.01,
+		'synapse_type':'ExpSyn',
+
+		'evals':10,
+		't_train':1.0,
+		'w_0':0.0005,
+		'bias_min':-3.0,
+		'bias_max':3.0,
+		'n_seg': 5,
+		'n_processes':10,
+	}
 
 	with nengo.Network() as model:
-		stim=nengo.Node(output=lambda t: signal(t,dim))
-		ens_in=nengo.Ensemble(n_neurons=n_in,dimensions=dim,seed=333)
-		ens_bio=nengo.Ensemble(n_neurons=n_bio,dimensions=dim,
-								neuron_type=BahlNeuron(filenames),label='ens_bio')
-		test_lif=nengo.Ensemble(n_neurons=n_bio,dimensions=dim,
-								neuron_type=nengo.LIF(),max_rates=nengo.dists.Uniform(40,60))
-		ens_out=nengo.Ensemble(n_neurons=n_in,dimensions=dim)
-		test_out=nengo.Ensemble(n_neurons=n_in,dimensions=dim)
+		stim=nengo.Node(output=lambda t: signal(t,P['dim']))
+		ens_in=nengo.Ensemble(n_neurons=P['n_in'],dimensions=P['dim'],seed=P['ens_in_seed'])
+		ens_bio=nengo.Ensemble(n_neurons=P['n_bio'],dimensions=P['dim'],
+								neuron_type=BahlNeuron(P),
+								n_eval_points=P['n_eval_points'],label='ens_bio')
+		test_lif=nengo.Ensemble(n_neurons=P['n_bio'],dimensions=P['dim'],
+								neuron_type=nengo.LIF(),
+								max_rates=nengo.dists.Uniform(P['min_ideal_rate'],
+									P['max_ideal_rate']))
+		ens_out=nengo.Ensemble(n_neurons=P['n_in'],dimensions=P['dim'])
+		test_out=nengo.Ensemble(n_neurons=P['n_in'],dimensions=P['dim'])
 
 		nengo.Connection(stim,ens_in,synapse=None)
-		nengo.Connection(ens_in,ens_bio,synapse=0.01)
+		conn=nengo.Connection(ens_in,ens_bio,synapse=0.01)
 		nengo.Connection(ens_in,test_lif,synapse=0.01)
-		#need to pass filenames around properly
-		# nengo.Connection(ens_bio.neurons,ens_out,
-		# 						transform=np.ones((1,n_bio))*rate_decoders_opt(filenames),
-		# 						synapse=0.01)
-		# solver=CustomSolver(filenames)
+		# solver=CustomSolver(P,model,conn)
 		# nengo.Connection(ens_bio,ens_out,solver=solver,synapse=0.01)
 		nengo.Connection(test_lif,test_out)
 
@@ -78,13 +75,15 @@ def main():
 		probe_out=nengo.Probe(ens_out,synapse=0.01)
 		probe_test_out=nengo.Probe(test_out,synapse=0.01)
 
-	with nengo.Simulator(model,dt=dt_nengo) as sim:
-		sim.run(t_sim)
+	with nengo.Simulator(model,dt=P['dt_nengo']) as sim:
+		sim.run(P['t_sim'])
 
 
 	sns.set(context='poster')
-	x_in=np.array(signal(sim.trange(),dim)).T
-	xhat_bio_out=sim.data[probe_out]
+	solver=CustomSolver(P,model,conn)
+	x_in=np.array(signal(sim.trange(),P['dim'])).T
+	xhat_bio_out=np.dot(solver.A.T,solver.decoders)
+	# xhat_bio_out=sim.data[probe_out]
 	xhat_test_out=sim.data[probe_test_out]
 	figure1, (ax1,ax2,ax3,ax4,ax5) = plt.subplots(5,1,sharex=True)
 	rasterplot(sim.trange(), sim.data[probe_in],ax=ax1,use_eventplot=True)
@@ -116,16 +115,17 @@ def main():
 	plt.legend(loc='lower right')
 	figure2.savefig('rmse.png')
 
-	figure3, ax3 = plt.subplots(1, 1)
-	for bio_idx in range(n_bio):
-		lifplot=ax3.plot(solver.x_sample[bio_idx,:-2],solver.A_ideal[bio_idx,:-2],linestyle='--')
-		bioplot=ax3.plot(solver.x_sample[bio_idx,:-2],solver.A_actual[bio_idx,:-2],linestyle='-',
-							color=lifplot[0].get_color())
-	ax3.plot(0,0,color='k',linestyle='-',label='bioneuron')
-	ax3.plot(0,0,color='k',linestyle='--',label='LIF')
-	ax3.set(xlabel='x',ylabel='firing rate (Hz)',ylim=(0,60))
-	plt.legend(loc='upper center')
-	figure3.savefig('response_curve_comparison.png')
+	# ipdb.set_trace()
+	# figure3, ax3 = plt.subplots(1, 1)
+	# for bio_idx in range(P['n_bio']):
+	# 	lifplot=ax3.plot(solver.Y[bio_idx,:-2],solver.A_ideal[bio_idx,:-2],linestyle='--')
+	# 	bioplot=ax3.plot(solver.Y[bio_idx,:-2],solver.A_actual[bio_idx,:-2],linestyle='-',
+	# 						color=lifplot[0].get_color())
+	# ax3.plot(0,0,color='k',linestyle='-',label='bioneuron')
+	# ax3.plot(0,0,color='k',linestyle='--',label='LIF')
+	# ax3.set(xlabel='x',ylabel='firing rate (Hz)',ylim=(0,60))
+	# plt.legend(loc='upper center')
+	# figure3.savefig('response_curve_comparison.png')
 
 if __name__=='__main__':
 	main()

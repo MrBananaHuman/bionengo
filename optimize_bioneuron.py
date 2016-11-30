@@ -29,8 +29,8 @@ def make_signal(P):
 	import signals
 	import numpy as np
 	sP=P['signal']
-	dt=P['dt']
-	t_final=P['t_sample']+dt #why is this extra step necessary?
+	dt=P['dt_nengo']
+	t_final=P['t_train']+dt #why is this extra step necessary?
 	raw_signal=[]
 	for d in range(P['dim']):
 		if sP['type']=='constant':
@@ -65,7 +65,7 @@ def make_spikes_in(P,raw_signal):
 	lifdata={}
 	while np.sum(spikes_in)==0: #rerun nengo spike generator until it returns something
 		with nengo.Network() as opt_model:
-			signal = nengo.Node(lambda t: raw_signal[:,int(t/P['dt'])]) #all dim, index at t
+			signal = nengo.Node(lambda t: raw_signal[:,int(t/P['dt_nengo'])]) #all dim, index at t
 			pre = nengo.Ensemble(n_neurons=P['n_in'],
 									dimensions=P['dim'],
 									seed=P['ens_in_seed'])
@@ -78,8 +78,8 @@ def make_spikes_in(P,raw_signal):
 			probe_signal = nengo.Probe(signal)
 			probe_pre = nengo.Probe(pre.neurons,'spikes')
 			probe_ideal = nengo.Probe(ideal.neurons,'spikes')
-		with nengo.Simulator(opt_model,dt=P['dt']) as opt_sim:
-			opt_sim.run(P['t_sample'])
+		with nengo.Simulator(opt_model,dt=P['dt_nengo']) as opt_sim:
+			opt_sim.run(P['t_train'])
 			# eval_points, activities = nengo.utils.ensemble.tuning_curves(ideal,opt_sim)
 		gains=opt_sim.data[ideal].gain
 		biases=opt_sim.data[ideal].bias
@@ -98,8 +98,8 @@ def weight_rescale(location):
 	import numpy as np
 	from scipy.interpolate import interp1d
 	#load voltage attenuation data for bahl.hoc
-	voltage_attenuation=np.load('/home/pduggins/bionengo/'+'voltage_attenuation.npz')
-	# voltage_attenuation=np.load('/home/psipeter/bionengo/'+'voltage_attenuation.npz')
+	# voltage_attenuation=np.load('/home/pduggins/bionengo/'+'voltage_attenuation.npz')
+	voltage_attenuation=np.load('/home/psipeter/bionengo/'+'voltage_attenuation.npz')
 	f_voltage_att = interp1d(voltage_attenuation['distances'],voltage_attenuation['voltages'])
 	scaled_weight=1.0/f_voltage_att(location)
 	return scaled_weight
@@ -130,7 +130,7 @@ def get_rates(P,spikes):
 	import numpy as np
 	import ipdb
 	import timeit
-	timesteps=np.arange(0,P['t_sample'],P['dt'])
+	timesteps=np.arange(0,P['t_train'],P['dt_nengo'])
 	if spikes.shape[0]==len(timesteps): #if we're given a spike train
 		if spikes.ndim == 2: #sum over all neurons' spikes
 			spike_train=np.sum(spikes,axis=1)
@@ -139,31 +139,31 @@ def get_rates(P,spikes):
 	elif len(spikes) > 0: #if we're given spike times and there's at least one spike
 		spike_train=np.zeros_like(timesteps)
 		spike_times=spikes.ravel()
-		for idx in spike_times/P['dt']/1000:
+		for idx in spike_times/P['dt_nengo']/1000:
 			if idx >= len(spike_train): break
-			spike_train[int(idx)]=1.0/P['dt']
+			spike_train[int(idx)]=1.0/P['dt_nengo']
 	else:
 		return np.zeros_like(timesteps), np.zeros_like(timesteps)
 	rates=np.zeros_like(spike_train)
 	if P['kernel']['type'] == 'exp':
-		tkern = np.arange(0,P['t_sample']/20.0,P['dt'])
+		tkern = np.arange(0,P['t_train']/20.0,P['dt_nengo'])
 		kernel = np.exp(-tkern/P['kernel']['tau'])
 		kernel /= kernel.sum()
 		rates = np.convolve(kernel, spike_train, mode='full')[:len(timesteps)]
 	elif P['kernel']['type'] == 'gauss':
-		tkern = np.arange(-P['t_sample']/20.0,P['t_sample']/20.0,P['dt'])
+		tkern = np.arange(-P['t_train']/20.0,P['t_train']/20.0,P['dt_nengo'])
 		kernel = np.exp(-tkern**2/(2*P['kernel']['sigma']**2))
 		kernel /= kernel.sum()
 		rates = np.convolve(kernel, spike_train, mode='same')
 	elif P['kernel']['type'] == 'alpha':  
-		tkern = np.arange(0,P['t_sample']/20.0,P['dt'])
+		tkern = np.arange(0,P['t_train']/20.0,P['dt_nengo'])
 		kernel = (tkern / P['kernel']['tau']) * np.exp(-tkern / P['kernel']['tau'])
 		kernel /= kernel.sum()
 		rates = np.convolve(kernel, spike_train, mode='full')[:len(timesteps)]
 	elif P['kernel']['type'] == 'isi_smooth':
 		f=isi_hold_function(timesteps,spike_times,midpoint=False)
 		interp=f(spike_times)
-		tkern = np.arange(-P['t_sample']/20.0,P['t_sample']/20.0,P['dt'])
+		tkern = np.arange(-P['t_train']/20.0,P['t_train']/20.0,P['dt_nengo'])
 		kernel = np.exp(-tkern**2/(2*P['kernel']['sigma']**2))
 		kernel /= kernel.sum()
 		rates = np.convolve(kernel, interp, mode='full')[:len(timesteps)]
@@ -183,7 +183,7 @@ def rate_loss(bio_rates,ideal_rates):
 # 	max_x_dot_e=np.max(np.dot(signal_in,encoders_ideal.T))
 # 	X=np.arange(min_x_dot_e,max_x_dot_e,P['dx'])
 # 	Hz=np.zeros_like(X) #firing rate for each eval point
-# 	timesteps=np.arange(0,P['t_sample'],P['dt'])
+# 	timesteps=np.arange(0,P['t_train'],P['dt_nengo'])
 # 	for xi in range(len(X)-1):
 # 		ts_greater=np.where(X[xi] < signal_in)[0]
 # 		ts_smaller=np.where(signal_in < X[xi+1])[0]
@@ -337,7 +337,7 @@ def connect_bioneuron(P,spikes_in,bioneuron):
 		#create spike time vectors and an artificial spiking cell that delivers them
 		vstim=neuron.h.VecStim()
 		bioneuron.vecstim[n]['vstim'].append(vstim)
-		spike_times_ms=list(1000*P['dt']*np.nonzero(spikes_in[:,n])[0]) #timely
+		spike_times_ms=list(1000*P['dt_nengo']*np.nonzero(spikes_in[:,n])[0]) #timely
 		vtimes=neuron.h.Vector(spike_times_ms)
 		bioneuron.vecstim[n]['vtimes'].append(vtimes)
 		bioneuron.vecstim[n]['vstim'][-1].play(bioneuron.vecstim[n]['vtimes'][-1])
@@ -349,9 +349,9 @@ def connect_bioneuron(P,spikes_in,bioneuron):
 
 def run_bioneuron(P):
 	import neuron
-	neuron.h.dt = P['dt']*1000
+	neuron.h.dt = P['dt_nengo']*1000
 	neuron.init()
-	neuron.run(P['t_sample']*1000)
+	neuron.run(P['t_train']*1000)
 
 
 '''
@@ -417,50 +417,15 @@ def simulate(P):
 	print 'Simulate Runtime - %s sec' %(stop-start)
 	return {'loss': loss, 'run_id':run_id, 'status': hyperopt.STATUS_OK}
 
-def optimize_bioneuron(ens_in_seed,n_in,n_bio,n_syn,dim,
-					evals=1000,dt_neuron=0.0001,dt_nengo=0.001,
-					tau=0.01,synapse_type='ExpSyn'):
+def optimize_bioneuron(P):
 	import json
 	import copy
 	from pathos.multiprocessing import ProcessingPool as Pool
 
 	datadir=ch_dir()
-	P={
-		'directory':datadir,
-		'ens_in_seed':ens_in_seed,
-		'n_in':n_in,
-		'n_syn':n_syn,
-		'n_bio':n_bio,
-		'dim':dim,
-		'dt':dt_neuron,
-		'evals':evals,
-		'synapse_tau':tau,
-		'synapse_type':synapse_type,
-		't_sample':3.0,
-		'min_ideal_rate':40,
-		'max_ideal_rate':60,
-		'w_0':0.0005,
-		'bias_min':-3.0,
-		'bias_max':3.0,
-		'n_seg': 5,
-		'dx':0.01,
-		'n_processes':n_bio,
-		'signal':
-			{'type':'equalpower','max_freq':5.0,'mean':0.0,'std':1.0},
-			#{'type':'constant','value':1.0},
-			#{'type':'pink_noise','mean':0.0,'std':1.0},
-			#{'type':'poisson','mean_freq':5.0,'max_freq':10.0},
-			#{'type':'switch','max_freq':10.0,},
-			#{'type':'white_binary','mean':0.0,'std':1.0},
-			#{'type':'poisson_binary','mean_freq':5.0,'max_freq':10.0,'low':-1.0,'high':1.0},
-			#{'type':'white'},
-		'kernel': #for smoothing spikes to calculate rate for tuning curve
-			#{'type':'exp','tau':0.02},
-			{'type':'gauss','sigma':0.01,},
-			#{'type':'alpha','tau':0.1},
-	}
-
+	P=copy.copy(P)
 	raw_signal=make_signal(P)
+	P['directory']=datadir
 	make_spikes_in(P,raw_signal)
 	P_list=[]
 	pool = Pool(nodes=P['n_processes'])
