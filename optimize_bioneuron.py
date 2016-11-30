@@ -31,6 +31,9 @@ def make_signal(P):
 	sP=P['signal']
 	dt=P['dt_nengo']
 	t_final=P['t_train']+dt #why is this extra step necessary?
+	if sP['type']=='prime_sinusoids':
+		raw_signal=signals.prime_sinusoids(dt,t_final,P['dim'])
+		return raw_signal
 	raw_signal=[]
 	for d in range(P['dim']):
 		if sP['type']=='constant':
@@ -63,30 +66,29 @@ def make_spikes_in(P,raw_signal):
 	import ipdb
 	spikes_in=[]
 	lifdata={}
-	while np.sum(spikes_in)==0: #rerun nengo spike generator until it returns something
-		with nengo.Network() as opt_model:
-			signal = nengo.Node(lambda t: raw_signal[:,int(t/P['dt_nengo'])]) #all dim, index at t
-			pre = nengo.Ensemble(n_neurons=P['n_in'],
-									dimensions=P['dim'],
-									seed=P['ens_in_seed'])
-			ideal = nengo.Ensemble(n_neurons=P['n_bio'],
-									dimensions=P['dim'],
-									max_rates=nengo.dists.Uniform(P['min_ideal_rate'],P['max_ideal_rate']),
-									neuron_type=nengo.neurons.LIF())
-			nengo.Connection(signal,pre,synapse=None)
-			nengo.Connection(pre,ideal,synapse=None)
-			probe_signal = nengo.Probe(signal)
-			probe_pre = nengo.Probe(pre.neurons,'spikes')
-			probe_ideal = nengo.Probe(ideal.neurons,'spikes')
-		with nengo.Simulator(opt_model,dt=P['dt_nengo']) as opt_sim:
-			opt_sim.run(P['t_train'])
-			# eval_points, activities = nengo.utils.ensemble.tuning_curves(ideal,opt_sim)
-		gains=opt_sim.data[ideal].gain
-		biases=opt_sim.data[ideal].bias
-		encoders=opt_sim.data[ideal].encoders
-		signal_in=opt_sim.data[probe_signal]
-		spikes_in=opt_sim.data[probe_pre]
-		spikes_ideal=opt_sim.data[probe_ideal]
+	with nengo.Network() as opt_model:
+		signal = nengo.Node(lambda t: raw_signal[:,int(t/P['dt_nengo'])]) #all dim, index at t
+		pre = nengo.Ensemble(n_neurons=P['n_in'],
+								dimensions=P['dim'],
+								seed=P['ens_in_seed'])
+		ideal = nengo.Ensemble(n_neurons=P['n_bio'],
+								dimensions=P['dim'],
+								max_rates=nengo.dists.Uniform(P['min_ideal_rate'],P['max_ideal_rate']),
+								neuron_type=nengo.neurons.LIF())
+		nengo.Connection(signal,pre,synapse=None)
+		nengo.Connection(pre,ideal,synapse=None)
+		probe_signal = nengo.Probe(signal)
+		probe_pre = nengo.Probe(pre.neurons,'spikes')
+		probe_ideal = nengo.Probe(ideal.neurons,'spikes')
+	with nengo.Simulator(opt_model,dt=P['dt_nengo']) as opt_sim:
+		opt_sim.run(P['t_train'])
+		# eval_points, activities = nengo.utils.ensemble.tuning_curves(ideal,opt_sim)
+	gains=opt_sim.data[ideal].gain
+	biases=opt_sim.data[ideal].bias
+	encoders=opt_sim.data[ideal].encoders
+	signal_in=opt_sim.data[probe_signal]
+	spikes_in=opt_sim.data[probe_pre]
+	spikes_ideal=opt_sim.data[probe_ideal]
 
 	np.savez(P['directory']+'lifdata.npz',
 			signal_in=signal_in,spikes_in=spikes_in,spikes_ideal=spikes_ideal,
@@ -99,7 +101,7 @@ def weight_rescale(location):
 	from scipy.interpolate import interp1d
 	#load voltage attenuation data for bahl.hoc
 	# voltage_attenuation=np.load('/home/pduggins/bionengo/'+'voltage_attenuation.npz')
-	voltage_attenuation=np.load('/home/psipeter/bionengo/'+'voltage_attenuation.npz')
+	voltage_attenuation=np.load('/home/pduggins/bionengo/'+'voltage_attenuation.npz')
 	f_voltage_att = interp1d(voltage_attenuation['distances'],voltage_attenuation['voltages'])
 	scaled_weight=1.0/f_voltage_att(location)
 	return scaled_weight
@@ -174,6 +176,37 @@ def rate_loss(bio_rates,ideal_rates):
 	loss=np.sqrt(np.average((bio_rates-ideal_rates)**2))
 	return loss
 
+def compare_bio_ideal_rates(P,filenames):
+	import numpy as np
+	import ipdb
+	import json
+	import matplotlib.pyplot as plt
+	import seaborn as sns
+	biopop=[]
+	for filename in filenames:
+		with open(filename,'r') as data_file: 
+			bioneuron=json.load(data_file)
+		biopop.append(bioneuron)
+	sns.set(context='poster')
+	figure1, (ax1,ax2) = plt.subplots(2, 1,sharex=True)
+
+	timesteps=np.arange(0,P['t_train'],P['dt_nengo'])
+	bio_rates=np.array([np.array(biopop[b]['bio_rates']) for b in range(len(biopop))])
+	ideal_rates=([np.array(biopop[b]['ideal_rates']) for b in range(len(biopop))])
+	loss=np.sqrt(np.average((bio_rates-ideal_rates)**2))
+
+	ax1.plot(timesteps,np.array(biopop[0]['signal_in']))
+	ax1.set(ylabel='signal_in',title='loss=%s'%loss)
+	for b in range(len(biopop)):
+		bio_rates=plt.plot(timesteps,np.array(biopop[b]['bio_rates']),linestyle='-')
+		ideal_rates=plt.plot(timesteps,np.array(biopop[b]['ideal_rates']),linestyle='--',
+			color=bio_rates[0].get_color())
+	ax2.plot(0,0,color='k',linestyle='-',label='bioneuron')
+	ax2.plot(0,0,color='k',linestyle='--',label='LIF')
+	ax2.set(xlabel='time (s)',ylabel='firing rate (Hz)',xlim=(0,2.0))
+	plt.legend(loc='upper center')
+	figure1.savefig('a(t)_bio_vs_ideal.png')
+
 # def make_tuning_curves(P,signal_in,encoders_ideal,biorates):
 # 	import numpy as np
 # 	import ipdb
@@ -190,7 +223,6 @@ def rate_loss(bio_rates,ideal_rates):
 # 		ts=np.intersect1d(ts_greater,ts_smaller)
 # 		if ts.shape[0]>0: Hz[xi]=np.average(biorates[ts])
 # 	return X, Hz
-
 
 # def tuning_curve_loss(P,lif_eval_points,lif_activities,bio_eval_points,bio_activities):
 # 	import numpy as np
@@ -209,72 +241,6 @@ def rate_loss(bio_rates,ideal_rates):
 # 	# X=np.arange(x_min,x_max,P['dx'])
 # 	loss=np.sqrt(np.average((f_bio_rate(X)-f_lif_rate(X))**2))
 # 	return X,f_bio_rate,f_lif_rate,loss
-
-def export_bioneuron(P,run_id,bias,weights,locations,signal_in,bio_rates,loss):
-	import json
-	to_export={
-		'bio_idx':P['bio_idx'],
-		'weights':weights.tolist(),
-		'locations': locations.tolist(),
-		'bias': bias,
-		# 'gain_ideal':gain_ideal,
-		# 'bias_ideal':bias_ideal,
-		# 'encoders_ideal':encoders_ideal.tolist(),
-		'signal_in': signal_in.tolist(),
-		'bio_rates': bio_rates.tolist(),
-		'loss': loss,
-		}
-	with open(run_id+'_bioneuron_%s.json'%P['bio_idx'], 'w') as data_file:
-		json.dump(to_export, data_file)
-
-# def export_bioneuron(P,run_id,spike_times,X,f_bio_rate,f_lif_rate,
-# 						gain_ideal,bias_ideal,encoders_ideal,loss):
-# 	import json
-# 	import numpy as np
-# 	import ipdb
-# 	bias=P['bias']
-# 	weights=np.zeros((P['n_in'],P['n_syn']))
-# 	locations=np.zeros((P['n_in'],P['n_syn']))
-# 	for n in range(P['n_in']):
-# 		for i in range(P['n_syn']):
-# 			weights[n][i]=P['weights']['%s_%s'%(n,i)]
-# 			locations[n][i]=P['locations']['%s_%s'%(n,i)]
-# 	to_export={
-# 		'bio_idx':P['bio_idx'],
-# 		'weights':weights.tolist(),
-# 		'locations': locations.tolist(),
-# 		'bias': bias,
-# 		'gain_ideal':gain_ideal,
-# 		'bias_ideal':bias_ideal,
-# 		'encoders_ideal':encoders_ideal.tolist(),
-# 		'x_sample': X.tolist(),
-# 		'spike_times': spike_times.tolist(),
-# 		'A_ideal': f_lif_rate(X).tolist(),
-# 		'A_actual': f_bio_rate(X).tolist(),
-# 		'loss': loss,
-# 		}
-# 	with open(run_id+'_bioneuron_%s.json'%P['bio_idx'], 'w') as data_file:
-# 		json.dump(to_export, data_file)
-
-def get_min_loss_filename(P,trials):
-	import numpy as np
-	import ipdb
-	import json
-	losses=[t['result']['loss'] for t in trials]
-	ids=[t['result']['run_id'] for t in trials]
-	idx=np.argmin(losses)
-	best_run_id=str(ids[idx])
-	filename=P['directory']+best_run_id+"_bioneuron_%s.json"%P['bio_idx']
-	return filename
-
-def get_best_biopop(P,filenames):
-	import json
-	biopop=[]
-	for filename in filenames:
-		with open(filename,'r') as data_file: 
-			bioneuron=json.load(data_file)
-		biopop.append(bioneuron)
-	return biopop
 
 # def plot_final_tuning_curves(P,biopop):
 # 	import numpy as np
@@ -353,6 +319,23 @@ def run_bioneuron(P):
 	neuron.init()
 	neuron.run(P['t_train']*1000)
 
+def export_bioneuron(P,run_id,bias,weights,locations,signal_in,ideal_rates,bio_rates,loss):
+	import json
+	to_export={
+		'bio_idx':P['bio_idx'],
+		'weights':weights.tolist(),
+		'locations': locations.tolist(),
+		'bias': bias,
+		# 'gain_ideal':gain_ideal,
+		# 'bias_ideal':bias_ideal,
+		# 'encoders_ideal':encoders_ideal.tolist(),
+		'signal_in': signal_in.tolist(),
+		'ideal_rates': ideal_rates.tolist(),
+		'bio_rates': bio_rates.tolist(),
+		'loss': loss,
+		}
+	with open(run_id+'_bioneuron_%s.json'%P['bio_idx'], 'w') as data_file:
+		json.dump(to_export, data_file)
 
 '''
 MAIN 
@@ -363,13 +346,18 @@ MAIN
 def run_hyperopt(P):
 	import hyperopt
 	import numpy as np
+	import json
 	trials=hyperopt.Trials()
 	best=hyperopt.fmin(simulate,
 		space=P,
 		algo=hyperopt.tpe.suggest,
 		max_evals=P['evals'],
 		trials=trials)
-	filename=get_min_loss_filename(P,trials)
+	losses=[t['result']['loss'] for t in trials]
+	ids=[t['result']['run_id'] for t in trials]
+	idx=np.argmin(losses)
+	best_run_id=str(ids[idx])
+	filename=P['directory']+best_run_id+"_bioneuron_%s.json"%P['bio_idx']
 	return filename
 
 def simulate(P):
@@ -388,7 +376,7 @@ def simulate(P):
 	lifdata=np.load(P['directory']+'lifdata.npz')
 	signal_in=lifdata['signal_in']
 	spikes_in=lifdata['spikes_in']
-	spikes_ideal=lifdata['spikes_ideal']
+	spikes_ideal=lifdata['spikes_ideal'][:,P['bio_idx']]
 	# lif_eval_points=lifdata['lif_eval_points'][:,P['bio_idx']]
 	# lif_activities=lifdata['lif_activities'][:,P['bio_idx']]
 	# gain_ideal=lifdata['gains'][P['bio_idx']]
@@ -409,7 +397,7 @@ def simulate(P):
 	bio_spikes, bio_rates=get_rates(P,np.round(np.array(bioneuron.spikes),decimals=3))
 	ideal_spikes, ideal_rates=get_rates(P,spikes_ideal)
 	loss = rate_loss(bio_rates,ideal_rates)
-	export_bioneuron(P,run_id,bias,weights,locations,signal_in,bio_rates,loss)
+	export_bioneuron(P,run_id,bias,weights,locations,signal_in,ideal_rates,bio_rates,loss)
 
 	del bioneuron
 	gc.collect()
@@ -436,6 +424,5 @@ def optimize_bioneuron(P):
 	filenames=pool.map(run_hyperopt, P_list)
 	with open('filenames.txt','wb') as outfile:
 		json.dump(filenames,outfile)
-	biopop_dict=get_best_biopop(P,filenames)
-	# plot_final_tuning_curves(P,biopop_dict)
+	compare_bio_ideal_rates(P,filenames)
 	return P['directory']+'filenames.txt'

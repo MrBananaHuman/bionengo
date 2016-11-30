@@ -10,6 +10,34 @@ import scipy.stats
 def constant(dt,t_final,value):
     return np.ones(int(t_final/dt))*1.0*value
 
+def prime_sinusoids(dt,t_final,dim):
+    import ipdb
+    def checkprime(n):
+        d=2
+        while d<=(n/2):
+            if n%d==0:
+                return 0
+            d+=1
+        return 1
+
+    def primeno(term):
+        numbers=[]
+        i=2
+        while len(numbers)<term:
+            if checkprime(i)==1:
+                numbers.append(i)
+            i+=1
+        return numbers
+
+    def sinusoids(t_final,primes,t):
+        import numpy as np
+        return np.array([np.sin(t/t_final*2*np.pi*hz) for hz in primes])
+
+    primes=primeno(dim)
+    timesteps=np.arange(0,t_final,dt)
+    output=sinusoids(t_final,primes,timesteps)
+    return output
+
 def equalpower(dt, t_final, max_freq, mean=0.0, std=1.0, n=None):
     """Generate a random signal with equal power below a maximum frequency
 

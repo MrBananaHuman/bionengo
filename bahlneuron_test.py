@@ -6,6 +6,7 @@ import seaborn as sns
 from nengo.utils.matplotlib import rasterplot
 import ipdb
 import json
+from optimize_bioneuron import make_signal
 
 def signal(t,dim):
 	return [np.sin((t+d**2*np.pi/(2.0/6))*2*np.pi/(1.0/6)) for d in range(dim)]
@@ -15,7 +16,7 @@ def main():
 		'dt_nengo':0.001,
 		'dt_neuron':0.0001,
 		'filenames':None, #todo: bug when t_sim > t_sample and filenames=None
-		# 'filenames':'/home/psipeter/bionengo/data/UJRQGR5ZS/filenames.txt', #with gain, bias
+		# 'filenames':'/home/pduggins/bionengo/data/UJRQGR5ZS/filenames.txt', #with gain, bias
 		# 'filenames':'/home/pduggins/bionengo/'+'data/U41GEJX4F/'+'filenames.txt', #with gain, bias
 		'n_in':50,
 		'n_bio':10,
@@ -23,22 +24,23 @@ def main():
 		'dim':2,
 		'ens_in_seed':333,
 		'n_eval_points':3333,
-		't_sim':1.0,
+		't_sim':5.0,
 
 		'kernel_type':'gaussian',
 		'tau_filter':0.01, #0.01, 0.2
 		'min_ideal_rate':40,
 		'max_ideal_rate':60,
 		'signal': #for optimization and decoder calculation
-			{'type':'equalpower','max_freq':15.0,'mean':0.0,'std':1.0},
+			{'type':'prime_sinusoids'},
+			# {'type':'equalpower','max_freq':10.0,'mean':0.0,'std':1.0},
 		'kernel': #for smoothing spikes to calculate A matrix
 			#{'type':'exp','tau':0.02},
 			{'type':'gauss','sigma':0.01,},
 		'synapse_tau':0.01,
 		'synapse_type':'ExpSyn',
 
-		'evals':10,
-		't_train':1.0,
+		'evals':2000,
+		't_train':5.0,
 		'w_0':0.0005,
 		'bias_min':-3.0,
 		'bias_max':3.0,
@@ -46,8 +48,10 @@ def main():
 		'n_processes':10,
 	}
 
+	raw_signal=make_signal(P)
+
 	with nengo.Network() as model:
-		stim=nengo.Node(output=lambda t: signal(t,P['dim']))
+		stim = nengo.Node(lambda t: raw_signal[:,int(t/P['dt_nengo'])]) #all dim, index at t
 		ens_in=nengo.Ensemble(n_neurons=P['n_in'],dimensions=P['dim'],seed=P['ens_in_seed'])
 		ens_bio=nengo.Ensemble(n_neurons=P['n_bio'],dimensions=P['dim'],
 								neuron_type=BahlNeuron(P),
@@ -62,8 +66,7 @@ def main():
 		nengo.Connection(stim,ens_in,synapse=None)
 		conn=nengo.Connection(ens_in,ens_bio,synapse=0.01)
 		nengo.Connection(ens_in,test_lif,synapse=0.01)
-		# solver=CustomSolver(P,model,conn)
-		# nengo.Connection(ens_bio,ens_out,solver=solver,synapse=0.01)
+		nengo.Connection(ens_bio,ens_out,solver=CustomSolver(P,conn),synapse=0.01) #adding breaks decoding
 		nengo.Connection(test_lif,test_out)
 
 		probe_in=nengo.Probe(ens_in.neurons,'spikes')
@@ -80,10 +83,8 @@ def main():
 
 
 	sns.set(context='poster')
-	solver=CustomSolver(P,model,conn)
-	x_in=np.array(signal(sim.trange(),P['dim'])).T
-	xhat_bio_out=np.dot(solver.A.T,solver.decoders)
-	# xhat_bio_out=sim.data[probe_out]
+	x_in=raw_signal[:,:len(sim.trange())].T
+	xhat_bio_out=sim.data[probe_out]
 	xhat_test_out=sim.data[probe_test_out]
 	figure1, (ax1,ax2,ax3,ax4,ax5) = plt.subplots(5,1,sharex=True)
 	rasterplot(sim.trange(), sim.data[probe_in],ax=ax1,use_eventplot=True)
@@ -105,15 +106,15 @@ def main():
 	plt.legend(loc='lower left')
 	figure1.savefig('bioneuron_plots.png')
 
-	figure2, ax2=plt.subplots(1,1)
-	ax2.plot(x_in,x_in)
-	ax2.plot(x_in,xhat_bio_out,label='bioneuron, RMSE=%s'
-				%np.sqrt(np.average((x_in-xhat_bio_out)**2)))
-	ax2.plot(x_in,xhat_test_out,label='LIF, RMSE=%s'
-				%np.sqrt(np.average((x_in-xhat_test_out)**2)))
-	ax2.set(xlabel='$x$',ylabel='$\hat{x}$')
-	plt.legend(loc='lower right')
-	figure2.savefig('rmse.png')
+	# figure2, ax2=plt.subplots(1,1)
+	# ax2.plot(x_in,x_in)
+	# ax2.plot(x_in,xhat_bio_out,label='bioneuron, RMSE=%s'
+	# 			%np.sqrt(np.average((x_in-xhat_bio_out)**2)))
+	# ax2.plot(x_in,xhat_test_out,label='LIF, RMSE=%s'
+	# 			%np.sqrt(np.average((x_in-xhat_test_out)**2)))
+	# ax2.set(xlabel='$x$',ylabel='$\hat{x}$')
+	# plt.legend(loc='lower right')
+	# figure2.savefig('rmse.png')
 
 	# ipdb.set_trace()
 	# figure3, ax3 = plt.subplots(1, 1)
