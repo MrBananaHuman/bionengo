@@ -18,30 +18,31 @@ def main():
 		'filenames':None, #todo: bug when t_sim > t_sample and filenames=None
 		# 'filenames':'/home/pduggins/bionengo/data/UJRQGR5ZS/filenames.txt', #with gain, bias
 		# 'filenames':'/home/pduggins/bionengo/'+'data/U41GEJX4F/'+'filenames.txt', #with gain, bias
+		# 'filenames':'/home/pduggins/bionengo/data/2YQ68TBCK/filenames.txt', #2D
 		'n_in':50,
-		'n_bio':10,
+		'n_bio':50,
 		'n_syn':5,
 		'dim':2,
 		'ens_in_seed':333,
-		'n_eval_points':3333,
-		't_sim':5.0,
+		'ens_LIF_seed':666,
+		'min_ideal_rate':20,
+		'max_ideal_rate':40,
+		't_sim':3.0,
+
 
 		'kernel_type':'gaussian',
-		'tau_filter':0.01, #0.01, 0.2
-		'min_ideal_rate':40,
-		'max_ideal_rate':60,
 		'signal': #for optimization and decoder calculation
 			{'type':'prime_sinusoids'},
 			# {'type':'equalpower','max_freq':10.0,'mean':0.0,'std':1.0},
-		'kernel': #for smoothing spikes to calculate A matrix
+		'kernel': #for smoothing spikes to calculate loss and A matrix
 			#{'type':'exp','tau':0.02},
-			{'type':'gauss','sigma':0.01,},
+			{'type':'gauss','sigma':0.02,},
+
+		'evals':500,
+		't_train':3.0,
 		'synapse_tau':0.01,
 		'synapse_type':'ExpSyn',
-
-		'evals':2000,
-		't_train':5.0,
-		'w_0':0.0005,
+		'w_0':0.0005,#0.0005
 		'bias_min':-3.0,
 		'bias_max':3.0,
 		'n_seg': 5,
@@ -52,14 +53,15 @@ def main():
 
 	with nengo.Network() as model:
 		stim = nengo.Node(lambda t: raw_signal[:,int(t/P['dt_nengo'])]) #all dim, index at t
-		ens_in=nengo.Ensemble(n_neurons=P['n_in'],dimensions=P['dim'],seed=P['ens_in_seed'])
+		ens_in=nengo.Ensemble(n_neurons=P['n_in'],dimensions=P['dim'],
+								seed=P['ens_in_seed'])
 		ens_bio=nengo.Ensemble(n_neurons=P['n_bio'],dimensions=P['dim'],
-								neuron_type=BahlNeuron(P),
-								n_eval_points=P['n_eval_points'],label='ens_bio')
+								neuron_type=BahlNeuron(P),label='ens_bio')
 		test_lif=nengo.Ensemble(n_neurons=P['n_bio'],dimensions=P['dim'],
 								neuron_type=nengo.LIF(),
 								max_rates=nengo.dists.Uniform(P['min_ideal_rate'],
-									P['max_ideal_rate']))
+									P['max_ideal_rate']),
+								seed=P['ens_LIF_seed'])
 		ens_out=nengo.Ensemble(n_neurons=P['n_in'],dimensions=P['dim'])
 		test_out=nengo.Ensemble(n_neurons=P['n_in'],dimensions=P['dim'])
 
@@ -91,19 +93,19 @@ def main():
 	ax1.set(ylabel='input \nspikes')
 	ax2.plot(sim.trange(),sim.data[probe_voltage])
 	ax2.set(ylabel='bioneuron \nvoltage')
-	# rasterplot(sim.trange(),sim.data[probe_spikes],ax=ax3,use_eventplot=True)
-	# ax3.set(ylabel='bioneuron \nspikes',yticks=([]))
-	rasterplot(sim.trange(),sim.data[probe_lif_spikes],ax=ax3,use_eventplot=True)
-	ax3.set(ylabel='lif \nspikes',yticks=([]))
-	ax4.plot(sim.trange(),x_in,label='$x(t)$') #color='k',ls='-',
-	ax4.plot(sim.trange(),sim.data[probe_bio],label='bioneuron $\hat{x}(t)$')
-	ax4.plot(sim.trange(),sim.data[probe_test],label='LIF $\hat{x}(t)$')
-	ax4.set(ylabel='decoded \nens')
+	rasterplot(sim.trange(),sim.data[probe_spikes],ax=ax3,use_eventplot=True)
+	ax3.set(ylabel='bioneuron \nspikes',yticks=([]))
+	rasterplot(sim.trange(),sim.data[probe_lif_spikes],ax=ax4,use_eventplot=True)
+	ax4.set(ylabel='lif \nspikes',yticks=([]))
+	# ax4.plot(sim.trange(),x_in,label='$x(t)$') #color='k',ls='-',
+	# ax4.plot(sim.trange(),sim.data[probe_bio],label='bioneuron $\hat{x}(t)$')
+	# ax4.plot(sim.trange(),sim.data[probe_test],label='LIF $\hat{x}(t)$')
+	# ax4.set(ylabel='decoded \nens')
 	ax5.plot(sim.trange(),x_in,label='$x(t)$') #color='k',ls='-',
 	ax5.plot(sim.trange(),xhat_bio_out,label='bioneuron $\hat{x}(t)$ ')
 	ax5.plot(sim.trange(),xhat_test_out,label='LIF $\hat{x}(t)$')
 	ax5.set(xlabel='time (s)',ylabel='decoded \nens_out')
-	plt.legend(loc='lower left')
+	plt.legend(loc='center right', prop={'size':6}, bbox_to_anchor=(1.1,0.8))
 	figure1.savefig('bioneuron_plots.png')
 
 	# figure2, ax2=plt.subplots(1,1)

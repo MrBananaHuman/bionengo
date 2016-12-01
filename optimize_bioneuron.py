@@ -74,7 +74,8 @@ def make_spikes_in(P,raw_signal):
 		ideal = nengo.Ensemble(n_neurons=P['n_bio'],
 								dimensions=P['dim'],
 								max_rates=nengo.dists.Uniform(P['min_ideal_rate'],P['max_ideal_rate']),
-								neuron_type=nengo.neurons.LIF())
+								neuron_type=nengo.neurons.LIF(),
+								seed=P['ens_LIF_seed'])
 		nengo.Connection(signal,pre,synapse=None)
 		nengo.Connection(pre,ideal,synapse=None)
 		probe_signal = nengo.Probe(signal)
@@ -204,7 +205,7 @@ def compare_bio_ideal_rates(P,filenames):
 	ax2.plot(0,0,color='k',linestyle='-',label='bioneuron')
 	ax2.plot(0,0,color='k',linestyle='--',label='LIF')
 	ax2.set(xlabel='time (s)',ylabel='firing rate (Hz)',xlim=(0,2.0))
-	plt.legend(loc='upper center')
+	plt.legend(loc='center right', prop={'size':6}, bbox_to_anchor=(1.1,0.8))
 	figure1.savefig('a(t)_bio_vs_ideal.png')
 
 # def make_tuning_curves(P,signal_in,encoders_ideal,biorates):

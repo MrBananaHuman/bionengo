@@ -13,7 +13,11 @@ class BahlNeuron(nengo.neurons.NeuronType):
 	def __init__(self,P):
 		super(BahlNeuron,self).__init__()
 		self.P=P
-		self.filenames=P['filenames']
+		if P['filenames'] is not None:
+			with open(P['filenames'],'r') as df:
+				self.filenames=json.load(df)
+		else:
+			self.filenames=P['filenames']
 
 	class Bahl():
 		def __init__(self):
@@ -139,7 +143,7 @@ class TransmitSpikes(Operator):
 
 def load_weights(P,bahl_op):
 	import ipdb
-	for j in range(P['n_bio']): #for each bioneuron
+	for j in range(len(bahl_op.neurons.filenames)): #for each bioneuron
 		bahl=BahlNeuron.Bahl()
 		with open(bahl_op.neurons.filenames[j],'r') as data_file:
 			bioneuron_info=json.load(data_file)
@@ -215,17 +219,20 @@ class CustomSolver(nengo.solvers.Solver):
 		P=self.P
 		self.bahl_op=self.conn.post.neuron_type.father_op
 		bio_rates=[]
-		for j in range(P['n_bio']): #for each bioneuron
+		for j in range(len(self.bahl_op.neurons.filenames)): #for each bioneuron
 			with open(self.bahl_op.neurons.filenames[j],'r') as data_file:
 				bioneuron_info=json.load(data_file)
 			bio_rates.append(bioneuron_info['bio_rates'])
 		self.activities=np.array(bio_rates)
-		self.upsilon=bioneuron_info['signal_in']
+		self.upsilon=np.array(bioneuron_info['signal_in'])
 		self.solver=nengo.solvers.LstsqL2()
 		self.decoders,self.info=self.solver(self.activities.T,self.upsilon)
+		return self.decoders, dict()
 
 	 	'''spike-approach: feed an N-dim white noise signal, through a spiking pre LIF population,
- 		collect spikes from the bioneuron population, then construct multidimensional A and Y'''
+ 		collect spikes from the bioneuron population, then construct multidimensional A and Y
+ 		NOTE: currently breaks bahlneuron_test simulation because NEURON references are not
+ 		properly cleared, or something'''
 
 		# '''1. Generate white noise signal'''
 		# print 'Computing A and Y...'
@@ -303,4 +310,4 @@ class CustomSolver(nengo.solvers.Solver):
 		# # load_weights(P,self.bahl_op)
 		# # neuron.init()
 
-		return self.decoders, dict()
+		# return self.decoders, dict()
