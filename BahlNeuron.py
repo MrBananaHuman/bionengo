@@ -70,8 +70,9 @@ class BahlNeuron(nengo.neurons.NeuronType):
 		return np.ones(len(max_rates)),np.ones(len(max_rates))
 
 	def step_math(self,dt,spiked,neurons,voltage,time):
-		if time==dt: neuron.init() #todo: prettier way to initialize first timestep without segfault
+		# if time==dt: neuron.init() #todo: prettier way to initialize first timestep without segfault
 		desired_t=time*1000
+		# ipdb.set_trace()
 		neuron.run(desired_t)
 		new_spiked=[]
 		new_voltage=[]
@@ -86,6 +87,7 @@ class BahlNeuron(nengo.neurons.NeuronType):
 			new_voltage.append(volt)
 		spiked[:]=np.array(new_spiked)/dt
 		voltage[:]=np.array(new_voltage)
+		# ipdb.set_trace()
 
 '''
 Builder #############################################################################3
@@ -133,6 +135,7 @@ class TransmitSpikes(Operator):
 		spikes=signals[self.spikes]
 		time=signals[self.time]
 		def step():
+			# ipdb.set_trace()
 			for n in range(spikes.shape[0]): #for each input neuron
 				if spikes[n] > 0: #if this neuron spiked at this time, then
 					for nrn in self.neurons: #for each bioneuron
@@ -184,7 +187,9 @@ def build_connection(model,conn):
 		P=conn.post.neuron_type.P
 		bahl_op=conn.post.neuron_type.father_op 
 
-		if bahl_op.neurons.filenames == None: 
+		if bahl_op.neurons.filenames == None:
+			'''import os
+			os.chdir(P['directory'])'''
 			from optimize_bioneuron import optimize_bioneuron
 			#todo: input conn.pre, make sample neurons identical
 			filenames=optimize_bioneuron(P)
@@ -206,7 +211,7 @@ class CustomSolver(nengo.solvers.Solver):
 
 	def __init__(self,P,conn):
 		self.P=P
-		self.conn=conn
+		self.conn=conn #only used to grab the SimBahlOp operator
 		self.weights=False #decoders not weights
 		self.bahl_op=None
 		self.A=None
