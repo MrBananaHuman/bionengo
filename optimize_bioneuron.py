@@ -68,14 +68,16 @@ def make_spikes_in(P,raw_signal):
 	lifdata={}
 	with nengo.Network() as opt_model:
 		signal = nengo.Node(lambda t: raw_signal[:,int(t/P['dt_nengo'])]) #all dim, index at t
-		pre = nengo.Ensemble(n_neurons=P['n_in'],
-								dimensions=P['dim'],
-								seed=P['ens_in_seed'])
-		ideal = nengo.Ensemble(n_neurons=P['n_bio'],
-								dimensions=P['dim'],
-								max_rates=nengo.dists.Uniform(P['min_ideal_rate'],P['max_ideal_rate']),
-								neuron_type=nengo.neurons.LIF(),
-								seed=P['ens_LIF_seed'])
+		pre = nengo.Ensemble(n_neurons=P['ens_pre_neurons'],
+								dimensions=P['ens_pre_dim'],
+								max_rates=nengo.dists.Uniform(P['ens_pre_min_rate'],
+																P['ens_pre_max_rate']),
+								seed=P['ens_pre_seed'])
+		ideal = nengo.Ensemble(n_neurons=P['ens_ideal_neurons'],
+								dimensions=P['ens_ideal_dim'],
+								max_rates=nengo.dists.Uniform(P['ens_ideal_min_rate'],
+																P['ens_ideal_max_rate']),
+								seed=P['ens_ideal_seed'])
 		nengo.Connection(signal,pre,synapse=None)
 		nengo.Connection(pre,ideal,synapse=None)
 		probe_signal = nengo.Probe(signal)
@@ -115,7 +117,7 @@ def add_search_space(P,bio_idx):
 	P['weights']={}
 	P['locations']={}
 	P['bias']=hyperopt.hp.uniform('b',P['bias_min'],P['bias_max'])
-	for n in range(P['n_in']):
+	for n in range(P['ens_pre_neurons']):
 		for i in range(P['n_syn']): 
 			P['locations']['%s_%s'%(n,i)] =\
 				np.round(np.random.uniform(0.0,1.0),decimals=2)
@@ -283,7 +285,7 @@ def make_bioneuron(P,weights,locations,bias):
 	from neurons import Bahl
 	bioneuron=Bahl()
 	#make connections and populate with synapses
-	for n in range(P['n_in']):
+	for n in range(P['ens_pre_neurons']):
 		bioneuron.add_bias(bias)
 		bioneuron.add_connection(n)
 		for i in range(P['n_syn']):
@@ -300,7 +302,7 @@ def connect_bioneuron(P,spikes_in,bioneuron):
 	import numpy as np
 	import neuron
 	import ipdb
-	for n in range(P['n_in']):
+	for n in range(P['ens_pre_neurons']):
 		#create spike time vectors and an artificial spiking cell that delivers them
 		vstim=neuron.h.VecStim()
 		bioneuron.vecstim[n]['vstim'].append(vstim)
@@ -349,11 +351,13 @@ def run_hyperopt(P):
 	import numpy as np
 	import json
 	trials=hyperopt.Trials()
-	best=hyperopt.fmin(simulate,
-		space=P,
-		algo=hyperopt.tpe.suggest,
-		max_evals=P['evals'],
-		trials=trials)
+	for t in range(P['evals']):
+		best=hyperopt.fmin(simulate,
+			space=P,
+			algo=hyperopt.tpe.suggest,
+			max_evals=(t+1),
+			trials=trials)
+		print 'Neuron %s hyperopt %s%%' %(P['bio_idx'],100.0*(t+1)/P['evals'])
 	losses=[t['result']['loss'] for t in trials]
 	ids=[t['result']['run_id'] for t in trials]
 	idx=np.argmin(losses)
@@ -384,9 +388,9 @@ def simulate(P):
 	# bias_ideal=lifdata['biases'][P['bio_idx']]
 	# encoders_ideal=lifdata['encoders'][P['bio_idx']]
 	bias=P['bias']
-	weights=np.zeros((P['n_in'],P['n_syn']))
-	locations=np.zeros((P['n_in'],P['n_syn']))
-	for n in range(P['n_in']):
+	weights=np.zeros((P['ens_pre_neurons'],P['n_syn']))
+	locations=np.zeros((P['ens_pre_neurons'],P['n_syn']))
+	for n in range(P['ens_pre_neurons']):
 		for i in range(P['n_syn']):
 			weights[n][i]=P['weights']['%s_%s'%(n,i)]
 			locations[n][i]=P['locations']['%s_%s'%(n,i)]
@@ -403,7 +407,7 @@ def simulate(P):
 	del bioneuron
 	gc.collect()
 	stop=timeit.default_timer()
-	print 'Simulate Runtime - %s sec' %(stop-start)
+	# print 'Simulate Runtime - %s sec' %(stop-start)
 	return {'loss': loss, 'run_id':run_id, 'status': hyperopt.STATUS_OK}
 
 def optimize_bioneuron(P):

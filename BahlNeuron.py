@@ -149,15 +149,15 @@ def load_weights(P,bahl_op):
 	for j in range(len(bahl_op.neurons.filenames)): #for each bioneuron
 		bahl=BahlNeuron.Bahl()
 		with open(bahl_op.neurons.filenames[j],'r') as data_file:
-			bioneuron_info=json.load(data_file)
-		n_inputs=len(np.array(bioneuron_info['weights']))
-		n_synapses=len(np.array(bioneuron_info['weights'])[0])
-		for n in range(n_inputs):
-			bahl.add_bias(bioneuron_info['bias'])
+			bioneuroens_pre_neuronsfo=json.load(data_file)
+		ens_pre_neuronsputs=len(np.array(bioneuroens_pre_neuronsfo['weights']))
+		n_synapses=len(np.array(bioneuroens_pre_neuronsfo['weights'])[0])
+		for n in range(ens_pre_neuronsputs):
+			bahl.add_bias(bioneuroens_pre_neuronsfo['bias'])
 			bahl.add_connection(n)
 			for i in range(n_synapses): #for each synapse connected to input neuron
-				section=bahl.cell.apical(np.array(bioneuron_info['locations'])[n][i])
-				weight=np.array(bioneuron_info['weights'])[n][i]
+				section=bahl.cell.apical(np.array(bioneuroens_pre_neuronsfo['locations'])[n][i])
+				weight=np.array(bioneuroens_pre_neuronsfo['weights'])[n][i]
 				bahl.add_synapse(n,bahl_op.P['synapse_type'],section,
 										weight,P['synapse_tau'],None)
 		bahl.start_recording()
@@ -178,20 +178,31 @@ def build_ensemble(model,ens):
 
 @Builder.register(nengo.Connection)
 def build_connection(model,conn):
+	import copy
 	use_nrn = (
 		isinstance(conn.post, nengo.Ensemble) and
 		isinstance(conn.post.neuron_type, BahlNeuron))
 	if use_nrn: #bioneuron connection
 		rng = np.random.RandomState(model.seeds[conn])
 		model.sig[conn]['in']=model.sig[conn.pre]['out']
-		P=conn.post.neuron_type.P
-		bahl_op=conn.post.neuron_type.father_op 
+		P=copy.copy(conn.post.neuron_type.P)
+		bahl_op=conn.post.neuron_type.father_op
 
 		if bahl_op.neurons.filenames == None:
 			'''import os
 			os.chdir(P['directory'])'''
+			# ipdb.set_trace()
+			P['ens_pre_neurons']=conn.pre.n_neurons
+			P['ens_pre_dim']=conn.pre.dimensions
+			P['ens_pre_min_rate']=conn.pre.max_rates.low
+			P['ens_pre_max_rate']=conn.pre.max_rates.high
+			P['ens_pre_seed']=conn.pre.seed
+			P['ens_ideal_neurons']=conn.post.n_neurons
+			P['ens_ideal_dim']=conn.post.dimensions
+			P['ens_ideal_seed']=conn.post.seed
+			P['ens_ideal_min_rate']=conn.post.max_rates.low
+			P['ens_ideal_max_rate']=conn.post.max_rates.high
 			from optimize_bioneuron import optimize_bioneuron
-			#todo: input conn.pre, make sample neurons identical
 			filenames=optimize_bioneuron(P)
 			with open(filenames,'r') as df:
 				bahl_op.neurons.filenames=json.load(df)
@@ -226,10 +237,10 @@ class CustomSolver(nengo.solvers.Solver):
 		bio_rates=[]
 		for j in range(len(self.bahl_op.neurons.filenames)): #for each bioneuron
 			with open(self.bahl_op.neurons.filenames[j],'r') as data_file:
-				bioneuron_info=json.load(data_file)
-			bio_rates.append(bioneuron_info['bio_rates'])
+				bioneuroens_pre_neuronsfo=json.load(data_file)
+			bio_rates.append(bioneuroens_pre_neuronsfo['bio_rates'])
 		self.activities=np.array(bio_rates)
-		self.upsilon=np.array(bioneuron_info['signal_in'])
+		self.upsilon=np.array(bioneuroens_pre_neuronsfo['signal_in'])
 		self.solver=nengo.solvers.LstsqL2()
 		self.decoders,self.info=self.solver(self.activities.T,self.upsilon)
 		return self.decoders, dict()
@@ -254,9 +265,9 @@ class CustomSolver(nengo.solvers.Solver):
 		# import ipdb
 		# with nengo.Network() as decode_model:
 		# 	signal_decode = nengo.Node(lambda t: raw_signal[:,int(t/P['dt_nengo'])]) #all dim, index at t
-		# 	pre_decode = nengo.Ensemble(n_neurons=P['n_in'],
+		# 	pre_decode = nengo.Ensemble(n_neurons=P['ens_pre_neurons'],
 		# 							dimensions=P['dim'],
-		# 							seed=P['ens_in_seed'])
+		# 							seed=P['ens_pre_seed'])
 		# 	nengo.Connection(signal_decode,pre_decode,synapse=None)
 		# 	probe_signal_decode = nengo.Probe(signal_decode)
 		# 	probe_pre_decode = nengo.Probe(pre_decode.neurons,'spikes')
@@ -270,14 +281,14 @@ class CustomSolver(nengo.solvers.Solver):
 		# bioneurons=[]
 		# for b in range(P['n_bio']):
 		# 	with open(self.bahl_op.neurons.filenames[b],'r') as data_file:
-		# 		bioneuron_info=json.load(data_file)
-		# 	bias=bioneuron_info['bias']
-		# 	weights=np.zeros((P['n_in'],P['n_syn']))
-		# 	locations=np.zeros((P['n_in'],P['n_syn']))
-		# 	for n in range(P['n_in']):
+		# 		bioneuroens_pre_neuronsfo=json.load(data_file)
+		# 	bias=bioneuroens_pre_neuronsfo['bias']
+		# 	weights=np.zeros((P['ens_pre_neurons'],P['n_syn']))
+		# 	locations=np.zeros((P['ens_pre_neurons'],P['n_syn']))
+		# 	for n in range(P['ens_pre_neurons']):
 		# 		for i in range(P['n_syn']):
-		# 			weights[n][i]=np.array(bioneuron_info['weights'])[n][i]
-		# 			locations[n][i]=np.array(bioneuron_info['locations'])[n][i]
+		# 			weights[n][i]=np.array(bioneuroens_pre_neuronsfo['weights'])[n][i]
+		# 			locations[n][i]=np.array(bioneuroens_pre_neuronsfo['locations'])[n][i]
 		# 	bioneuron = make_bioneuron(P,weights,locations,bias)
 		# 	connect_bioneuron(P,spikes_in,bioneuron)
 		# 	bioneurons.append(bioneuron)
@@ -305,7 +316,7 @@ class CustomSolver(nengo.solvers.Solver):
 		# # self.bahl_op.neurons.neurons=None
 		# # self.bahl_op.neurons.neurons=[self.bahl_op.neurons.create(i) for i in range(P['n_bio'])]
 		# # # for nrn in bioneurons:
-		# # 	# for n in range(P['n_in']):
+		# # 	# for n in range(P['ens_pre_neurons']):
 		# # 	# 	del(nrn.synapses)
 		# # 	# 	del(nrn.vecstim)
 		# # 	# 	del(nrn.netcons)
