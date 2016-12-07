@@ -13,11 +13,13 @@ class BahlNeuron(nengo.neurons.NeuronType):
 	def __init__(self,P):
 		super(BahlNeuron,self).__init__()
 		self.P=P
-		if P['filenames'] is not None:
-			with open(P['filenames'],'r') as df:
+		self.bioneuron_directory=P['bioneuron_directory']
+		if self.bioneuron_directory is not None:
+			with open(self.bioneuron_directory+'filenames.txt','r') as df:
 				self.filenames=json.load(df)
 		else:
-			self.filenames=P['filenames']
+			self.filenames=None
+		self.optimized=None
 
 	class Bahl():
 		def __init__(self):
@@ -58,10 +60,50 @@ class BahlNeuron(nengo.neurons.NeuronType):
 			elif syn_type == 'Exp2Syn':
 				self.synapses[idx].append(Exp2Syn(section,weight,tau,tau2))
 
-	def create(self,idx,):
+	def create(self,idx):
 		self.bio_idx=idx
 		self.bahl=None
 		return copy.copy(self)
+
+	def save_optimization(self):
+		self.indices=[]
+		self.weights=[]
+		self.locations=[]
+		self.biases=[]
+		self.signal_in=[]
+		self.bio_spikes=[]
+		self.bio_rates=[]
+		self.ideal_spikes=[]
+		self.ideal_rates=[]
+		self.losses=[]
+		for j in range(len(self.filenames)): #for each bioneuron
+			with open(self.filenames[j],'r') as data_file:
+				bioneuron_info=json.load(data_file)
+			self.indices.append(bioneuron_info['bio_idx'])
+			self.weights.append(bioneuron_info['weights'])
+			self.locations.append(bioneuron_info['locations'])
+			self.biases.append(bioneuron_info['bias'])
+			self.signal_in.append(bioneuron_info['signal_in'])
+			self.bio_spikes.append(bioneuron_info['bio_spikes'])
+			self.bio_rates.append(bioneuron_info['bio_rates'])
+			self.ideal_spikes.append(bioneuron_info['ideal_spikes'])
+			self.ideal_rates.append(bioneuron_info['ideal_rates'])
+			self.losses.append(bioneuron_info['loss'])
+		self.indices=np.array(self.indices)
+		self.weights=np.array(self.weights)
+		self.locations=np.array(self.locations)
+		self.biases=np.array(self.biases)
+		self.signal_in=np.array(self.signal_in)[0]
+		self.bio_spikes=np.array(self.bio_spikes)
+		self.bio_rates=np.array(self.bio_rates)
+		self.ideal_spikes=np.array(self.ideal_spikes)
+		self.ideal_rates=np.array(self.ideal_rates)
+		self.losses=np.array(self.losses)
+		np.savez(self.bioneuron_directory+'biodata.npz',
+				indices=self.indices,weights=self.weights,locations=self.locations,
+				biases=self.biases,signal_in=self.signal_in,bio_spikes=self.bio_spikes,
+				bio_rates=self.bio_rates,ideal_spikes=self.ideal_spikes,ideal_rates=self.ideal_rates,
+				losses=self.losses)
 
 	def rates(self, x, gain, bias): #todo: remove this without errors
 		return x #CustomSolver class calculates A from Y
@@ -73,7 +115,8 @@ class BahlNeuron(nengo.neurons.NeuronType):
 		# if time==dt: neuron.init() #todo: prettier way to initialize first timestep without segfault
 		desired_t=time*1000
 		# ipdb.set_trace()
-		neuron.run(desired_t)
+		'''runs NEURON only for 1st bioensemble in model...OK because transmit_spikes happend already?'''
+		neuron.run(desired_t) 
 		new_spiked=[]
 		new_voltage=[]
 		for nrn in neurons:
@@ -188,27 +231,30 @@ def build_connection(model,conn):
 		P=copy.copy(conn.post.neuron_type.P)
 		bahl_op=conn.post.neuron_type.father_op
 
-		if bahl_op.neurons.filenames == None:
-			'''import os
-			os.chdir(P['directory'])'''
-			# ipdb.set_trace()
+		if bahl_op.neurons.bioneuron_directory == None:
 			P['ens_pre_neurons']=conn.pre.n_neurons
 			P['ens_pre_dim']=conn.pre.dimensions
 			P['ens_pre_min_rate']=conn.pre.max_rates.low
 			P['ens_pre_max_rate']=conn.pre.max_rates.high
 			P['ens_pre_seed']=conn.pre.seed
+			P['ens_pre_type']=str(conn.pre.neuron_type)
+			if isinstance(conn.pre.neuron_type,BahlNeuron):
+				P['ens_pre_label']=conn.pre.label+'/'
+			P['ens_label']=conn.post.label+'/'
 			P['ens_ideal_neurons']=conn.post.n_neurons
 			P['ens_ideal_dim']=conn.post.dimensions
 			P['ens_ideal_seed']=conn.post.seed
 			P['ens_ideal_min_rate']=conn.post.max_rates.low
 			P['ens_ideal_max_rate']=conn.post.max_rates.high
 			from optimize_bioneuron import optimize_bioneuron
-			filenames=optimize_bioneuron(P)
+			bahl_op.neurons.bioneuron_directory=optimize_bioneuron(P)
+			filenames=bahl_op.neurons.bioneuron_directory+'filenames.txt'
 			with open(filenames,'r') as df:
 				bahl_op.neurons.filenames=json.load(df)
 
 		load_weights(P,bahl_op) 	#load weights into these operators
-		model.add_op(TransmitSpikes(model.sig[conn]['in'],bahl_op,states=[model.time]))
+		conn.post.neuron_type.save_optimization()	#save contents of filenames to the neuron
+		model.add_op(TransmitSpikes(model.sig[conn]['in'],bahl_op,states=[model.time])) #setup spike transmission
 
 	else: #normal connection
 		return nengo.builder.connection.build_connection(model, conn)
@@ -230,17 +276,9 @@ class CustomSolver(nengo.solvers.Solver):
 		self.decoders=None
 
 	def __call__(self,A,Y,rng=None,E=None): #function that gets called by the builder
-
 		'''preloaded spike approach: same as below, but saved from optimize_bioneuron'''
-		P=self.P
-		self.bahl_op=self.conn.post.neuron_type.father_op
-		bio_rates=[]
-		for j in range(len(self.bahl_op.neurons.filenames)): #for each bioneuron
-			with open(self.bahl_op.neurons.filenames[j],'r') as data_file:
-				bioneuroens_pre_neuronsfo=json.load(data_file)
-			bio_rates.append(bioneuroens_pre_neuronsfo['bio_rates'])
-		self.activities=np.array(bio_rates)
-		self.upsilon=np.array(bioneuroens_pre_neuronsfo['signal_in'])
+		self.activities=self.conn.post.neuron_type.bio_rates
+		self.upsilon=self.conn.post.neuron_type.signal_in
 		self.solver=nengo.solvers.LstsqL2()
 		self.decoders,self.info=self.solver(self.activities.T,self.upsilon)
 		return self.decoders, dict()

@@ -6,8 +6,9 @@ import seaborn as sns
 from nengo.utils.matplotlib import rasterplot
 import ipdb
 import json
-from optimize_bioneuron import make_signal
+from optimize_bioneuron import make_signal,ch_dir
 import copy
+import os
 
 def signal(t,dim):
 	return [np.sin((t+d**2*np.pi/(2.0/6))*2*np.pi/(1.0/6)) for d in range(dim)]
@@ -16,11 +17,10 @@ def main():
 	P={
 		'dt_nengo':0.001,
 		'dt_neuron':0.0001,
-		'filenames':None, #todo: bug when t_sim > t_sample and filenames=None
-		# 'filenames':'/home/pduggins/bionengo/data/UJRQGR5ZS/filenames.txt', #with gain, bias
-		# 'filenames':'/home/pduggins/bionengo/data/U41GEJX4F/filenames.txt', #with gain, bias
+		'bioneuron_directory':None,
+		'directory':None,
+		# 'directory':'/home/pduggins/bionengo/data/O39M2CO1X/', #todo: bug when t_sim > t_sample and filenames=None
 		# 'filenames':'/home/pduggins/bionengo/data/HYS349HZC/filenames.txt', #2D 50 neurons 3k eval
-		# 'filenames':'/home/pduggins/bionengo/data/R6ZLH1S4Z/filenames.txt', #with gain, bias
 		'ens_pre_neurons':50,
 		'n_bio':50,
 		'n_syn':5,
@@ -47,21 +47,29 @@ def main():
 		't_train':3.0,
 		'synapse_tau':0.01,
 		'synapse_type':'ExpSyn',
-		'w_0':0.0005,#0.0005
+		'w_0':0.0005,#0.0005 for n_pre=50 with max_rates=uniform(200,400)
 		'bias_min':-3.0,
 		'bias_max':3.0,
 		'n_seg': 5,
 		'n_processes':10,
 	}
-	# P2=copy.copy(P)
-	# P2['filenames']='/home/pduggins/bionengo/data/R6ZLH1S4Z/data/CISCAQTOA/filenames.txt'
 
-	raw_signal=make_signal(P)
+	if P['directory']==None:
+		datadir=ch_dir()
+		P['directory']=datadir
+	else:
+		os.makedirs(P['directory'])
+		os.chdir(P['directory'])
+	P2=copy.copy(P)
+	# P2['signal']={'type':'equalpower','max_freq':10.0,'mean':0.0,'std':1.0}
+	raw_signal=make_signal(P2)
 
 	with nengo.Network() as model:
 		stim = nengo.Node(lambda t: raw_signal[:,int(t/P['dt_nengo'])]) #all dim, index at t
 		ens_in=nengo.Ensemble(n_neurons=P['ens_pre_neurons'],dimensions=P['dim'],
-								seed=P['ens_pre_seed'])
+								seed=P['ens_pre_seed'],
+								max_rates=nengo.dists.Uniform(200,400))
+		# P['bioneuron_directory']=P['directory']+'ens_bio/'
 		ens_bio=nengo.Ensemble(n_neurons=P['n_bio'],dimensions=P['dim'],
 								neuron_type=BahlNeuron(P),label='ens_bio',
 								seed=P['ens_ideal_seed'],
@@ -71,6 +79,7 @@ def main():
 								neuron_type=nengo.LIF(),seed=P['ens_ideal_seed'],
 								max_rates=nengo.dists.Uniform(P['min_ideal_rate'],
 																P['max_ideal_rate']))
+		# P['bioneuron_directory']=P['directory']+'ens_bio2/'
 		ens_bio2=nengo.Ensemble(n_neurons=P['n_bio'],dimensions=P['dim'],
 								neuron_type=BahlNeuron(P),label='ens_bio2',										
 								seed=P['ens_ideal2_seed'],
@@ -86,7 +95,8 @@ def main():
 		nengo.Connection(stim,ens_in,synapse=None)
 		conn=nengo.Connection(ens_in,ens_bio,synapse=P['nengo_synapse'])
 		nengo.Connection(ens_in,ens_lif,synapse=P['nengo_synapse'])
-		conn2=nengo.Connection(ens_bio,ens_bio2,solver=CustomSolver(P,conn),synapse=P['nengo_synapse'])
+		# conn2=nengo.Connection(ens_bio,ens_bio2,solver=CustomSolver(P,conn),synapse=P['nengo_synapse'])
+		conn2=nengo.Connection(ens_lif,ens_bio2,solver=CustomSolver(P,conn),synapse=P['nengo_synapse'])
 		nengo.Connection(ens_lif,ens_lif2,synapse=P['nengo_synapse'])
 		# conn2=nengo.Connection(ens_in,ens_bio2,synapse=P['nengo_synapse'])
 		# nengo.Connection(ens_bio2,node_bio_out,solver=CustomSolver(P,conn2),synapse=P['nengo_synapse'])
@@ -135,15 +145,34 @@ def main():
 	figure1.savefig('bioneuron_vs_LIF_decode.png')
 
 
+	biodata1=np.load(P['directory']+'ens_bio/'+'biodata.npz')
+	biodata2=np.load(P['directory']+'ens_bio2/'+'biodata.npz')
+	optimization_spikes1=biodata1['bio_spikes'].T
+	optimization_spikes2=biodata2['bio_spikes'].T
+	lif_optimization_spikes1=biodata1['ideal_spikes'].T
+	lif_optimization_spikes2=biodata2['ideal_spikes'].T
+
 	figure2, ((ax1,ax2),(ax3,ax4),(ax5,ax6)) = plt.subplots(3,2,sharex=True)
 	rasterplot(sim.trange(),sim.data[probe_in_spikes],ax=ax1,use_eventplot=True)
 	ax1.set(ylabel='input \nspikes',yticks=([]))
 	rasterplot(sim.trange(),sim.data[probe_in_spikes],ax=ax2,use_eventplot=True)
 	ax2.set(ylabel='input \nspikes',yticks=([]))
+
 	rasterplot(sim.trange(),sim.data[probe_bio_spikes],ax=ax3,use_eventplot=True)
 	ax3.set(ylabel='bioneuron \nspikes',yticks=([]))
 	rasterplot(sim.trange(),sim.data[probe_bio_spikes2],ax=ax5,use_eventplot=True)
 	ax5.set(xlabel='time (s)',ylabel='bioneuron2 \nspikes',yticks=([]))
+
+	# rasterplot(sim.trange(),lif_optimization_spikes1,ax=ax3,use_eventplot=True)
+	# ax3.set(ylabel='saved lif_spikes',yticks=([]))
+	# rasterplot(sim.trange(),lif_optimization_spikes2,ax=ax5,use_eventplot=True)
+	# ax5.set(xlabel='time (s)',ylabel='saved lif_spikes2',yticks=([]))
+
+	# rasterplot(sim.trange(),optimization_spikes1,ax=ax4,use_eventplot=True)
+	# ax4.set(ylabel='saved bio_spikes',yticks=([]))
+	# rasterplot(sim.trange(),optimization_spikes2,ax=ax6,use_eventplot=True)
+	# ax6.set(xlabel='time (s)',ylabel='saved bio_spikes2',yticks=([]))
+
 	rasterplot(sim.trange(),sim.data[probe_lif_spikes],ax=ax4,use_eventplot=True)
 	ax4.set(ylabel='lif spikes',yticks=([]))
 	rasterplot(sim.trange(),sim.data[probe_lif_spikes2],ax=ax6,use_eventplot=True)
