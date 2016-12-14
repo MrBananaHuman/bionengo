@@ -10,15 +10,17 @@ class BahlNeuron(nengo.neurons.NeuronType):
 	'''compartmental neuron from Bahl et al 2012'''
 
 	probeable=('spikes','voltage')
-	def __init__(self,P):
+	def __init__(self,P,inputs=None):
 		super(BahlNeuron,self).__init__()
 		self.P=P
-		self.bioneuron_directory=P['bioneuron_directory']
-		if self.bioneuron_directory is not None:
-			with open(self.bioneuron_directory+'filenames.txt','r') as df:
-				self.filenames=json.load(df)
-		else:
-			self.filenames=None
+		self.inputs={} #structured like {ens_in_label: {directory,filenames}}
+		if inputs is not None:
+			for inpt in inputs:
+				with open(inpt['directory']+'filenames.txt','r') as df:
+					filenames=json.load(df)
+				self.inputs[inpt['label']]={
+								'directory':inpt['directory'],
+								'filenames':filenames}
 		self.optimized=None
 
 	class Bahl():
@@ -65,45 +67,51 @@ class BahlNeuron(nengo.neurons.NeuronType):
 		self.bahl=None
 		return copy.copy(self)
 
-	def save_optimization(self):
-		self.indices=[]
-		self.weights=[]
-		self.locations=[]
-		self.biases=[]
-		self.signal_in=[]
-		self.bio_spikes=[]
-		self.bio_rates=[]
-		self.ideal_spikes=[]
-		self.ideal_rates=[]
-		self.losses=[]
-		for j in range(len(self.filenames)): #for each bioneuron
-			with open(self.filenames[j],'r') as data_file:
+	def save_optimization(self,conn_pre_label,directory,filenames):
+		indices=[]
+		weights=[]
+		locations=[]
+		biases=[]
+		signal_in=[]
+		bio_spikes=[]
+		bio_rates=[]
+		ideal_spikes=[]
+		ideal_rates=[]
+		losses=[]
+		for file in filenames: #for each bioneuron
+			with open(file,'r') as data_file:
 				bioneuron_info=json.load(data_file)
-			self.indices.append(bioneuron_info['bio_idx'])
-			self.weights.append(bioneuron_info['weights'])
-			self.locations.append(bioneuron_info['locations'])
-			self.biases.append(bioneuron_info['bias'])
-			self.signal_in.append(bioneuron_info['signal_in'])
-			self.bio_spikes.append(bioneuron_info['bio_spikes'])
-			self.bio_rates.append(bioneuron_info['bio_rates'])
-			self.ideal_spikes.append(bioneuron_info['ideal_spikes'])
-			self.ideal_rates.append(bioneuron_info['ideal_rates'])
-			self.losses.append(bioneuron_info['loss'])
-		self.indices=np.array(self.indices)
-		self.weights=np.array(self.weights)
-		self.locations=np.array(self.locations)
-		self.biases=np.array(self.biases)
-		self.signal_in=np.array(self.signal_in)[0]
-		self.bio_spikes=np.array(self.bio_spikes)
-		self.bio_rates=np.array(self.bio_rates)
-		self.ideal_spikes=np.array(self.ideal_spikes)
-		self.ideal_rates=np.array(self.ideal_rates)
-		self.losses=np.array(self.losses)
-		np.savez(self.bioneuron_directory+'biodata.npz',
-				indices=self.indices,weights=self.weights,locations=self.locations,
-				biases=self.biases,signal_in=self.signal_in,bio_spikes=self.bio_spikes,
-				bio_rates=self.bio_rates,ideal_spikes=self.ideal_spikes,ideal_rates=self.ideal_rates,
-				losses=self.losses)
+			indices.append(bioneuron_info['bio_idx'])
+			weights.append(bioneuron_info['weights'])
+			locations.append(bioneuron_info['locations'])
+			biases.append(bioneuron_info['bias'])
+			signal_in.append(bioneuron_info['signal_in'])
+			bio_spikes.append(bioneuron_info['bio_spikes'])
+			bio_rates.append(bioneuron_info['bio_rates'])
+			ideal_spikes.append(bioneuron_info['ideal_spikes'])
+			ideal_rates.append(bioneuron_info['ideal_rates'])
+			losses.append(bioneuron_info['loss'])
+		self.inputs[conn_pre_label]['indices']=np.array(indices)
+		self.inputs[conn_pre_label]['weights']=np.array(weights)
+		self.inputs[conn_pre_label]['locations']=np.array(locations)
+		self.inputs[conn_pre_label]['biases']=np.array(biases)
+		self.inputs[conn_pre_label]['signal_in']=np.array(signal_in)[0]
+		self.inputs[conn_pre_label]['bio_spikes']=np.array(bio_spikes)
+		self.inputs[conn_pre_label]['bio_rates']=np.array(bio_rates)
+		self.inputs[conn_pre_label]['ideal_spikes']=np.array(ideal_spikes)
+		self.inputs[conn_pre_label]['ideal_rates']=np.array(ideal_rates)
+		self.inputs[conn_pre_label]['losses']=np.array(losses)
+		np.savez(directory+'/'+conn_pre_label+'_biodata.npz',
+				indices=self.inputs[conn_pre_label]['indices'],
+				weights=self.inputs[conn_pre_label]['weights'],
+				locations=self.inputs[conn_pre_label]['locations'],
+				biases=self.inputs[conn_pre_label]['biases'],
+				signal_in=self.inputs[conn_pre_label]['signal_in'],
+				bio_spikes=self.inputs[conn_pre_label]['bio_spikes'],
+				bio_rates=self.inputs[conn_pre_label]['bio_rates'],
+				ideal_spikes=self.inputs[conn_pre_label]['ideal_spikes'],
+				ideal_rates=self.inputs[conn_pre_label]['ideal_rates'],
+				losses=self.inputs[conn_pre_label]['losses'])
 
 	def rates(self, x, gain, bias): #todo: remove this without errors
 		return x #CustomSolver class calculates A from Y
@@ -119,17 +127,20 @@ class BahlNeuron(nengo.neurons.NeuronType):
 		neuron.run(desired_t) 
 		new_spiked=[]
 		new_voltage=[]
+		# print 'nengo time', time, 'neuron time', neuron.h.t, 't-dt', (time-dt)*1000
 		for nrn in neurons:
-			spike_times=np.round(np.array(nrn.bahl.spikes),decimals=3)
+			spike_times=np.round(np.array(nrn.bahl.spikes),decimals=1)
 			count=np.sum(spike_times>(time-dt)*1000)
 			new_spiked.append(count)
-			nrn.bahl.nengo_spike_times.extend(
-					spike_times[spike_times>(time-dt)*1000])
+			nrn.bahl.nengo_spike_times.extend(spike_times[spike_times>(time-dt)*1000])
 			volt=np.array(nrn.bahl.v_record)[-1] #fails if neuron.init() not called at right times
 			nrn.bahl.nengo_voltages.append(volt)
 			new_voltage.append(volt)
+			# if len(spike_times)>0: print 'spike time', spike_times[-1], 'voltage', volt
+			# else: print 'spike time', 0, 'voltage', volt
 		spiked[:]=np.array(new_spiked)/dt
 		voltage[:]=np.array(new_voltage)
+		# print spiked
 		# ipdb.set_trace()
 
 '''
@@ -172,13 +183,35 @@ class TransmitSpikes(Operator):
 		self.updates=[]
 		self.sets=[]
 		self.incs=[]
+		neuron.h.dt = bahl_op.P['dt_neuron']*1000
 		neuron.init()
 
 	def make_step(self,signals,dt,rng):
 		spikes=signals[self.spikes]
 		time=signals[self.time]
 		def step():
-			# ipdb.set_trace()
+			'''BROKEN: vecstim based method: create spike time vectors 
+			and an artificial spiking cell that delivers them'''
+			# for nrn in self.neurons: #for each bioneuron
+			# 	for i in range(spikes.shape[0]):
+			# 		nrn.bahl.vecstim[i]={'vstim':[],'vtimes':[]}
+			# 		nrn.bahl.netcons[i]=[]
+			# 		vstim=neuron.h.VecStim()
+			# 		nrn.bahl.vecstim[i]['vstim'].append(vstim)	
+
+			# for i in range(spikes.shape[0]): #for each input neuron
+			# 	if spikes[i] > 0: #if this neuron spiked at this time, then
+			# 		spike_time_ms=list([1000*time])
+			# 		for nrn in self.neurons: #for each bioneuron
+			# 			vtimes=neuron.h.Vector(spike_time_ms)
+			# 			nrn.bahl.vecstim[i]['vtimes'].append(vtimes)
+			# 			nrn.bahl.vecstim[i]['vstim'][-1].play(nrn.bahl.vecstim[i]['vtimes'][-1])
+			# 			for syn in nrn.bahl.synapses[i]: #connect the VecStim to each synapse
+			# 				netcon=neuron.h.NetCon(nrn.bahl.vecstim[i]['vstim'][-1],syn.syn)
+			# 				netcon.weight[0]=abs(syn.weight)
+			# 				nrn.bahl.netcons[i].append(netcon)
+
+			'event-based method'
 			for n in range(spikes.shape[0]): #for each input neuron
 				if spikes[n] > 0: #if this neuron spiked at this time, then
 					for nrn in self.neurons: #for each bioneuron
@@ -187,22 +220,23 @@ class TransmitSpikes(Operator):
 		return step
 
 
-def load_weights(P,bahl_op):
+def load_weights(P,conn_pre_label,bahl_op):
 	import ipdb
-	for j in range(len(bahl_op.neurons.filenames)): #for each bioneuron
+	for j in range(len(bahl_op.neurons.inputs[conn_pre_label]['filenames'])): #for each bioneuron
 		bahl=BahlNeuron.Bahl()
-		with open(bahl_op.neurons.filenames[j],'r') as data_file:
-			bioneuroens_pre_neuronsfo=json.load(data_file)
-		ens_pre_neuronsputs=len(np.array(bioneuroens_pre_neuronsfo['weights']))
-		n_synapses=len(np.array(bioneuroens_pre_neuronsfo['weights'])[0])
-		for n in range(ens_pre_neuronsputs):
-			bahl.add_bias(bioneuroens_pre_neuronsfo['bias'])
+		with open(bahl_op.neurons.inputs[conn_pre_label]['filenames'][j],'r') as data_file:
+			bioneuron_info=json.load(data_file)
+		ens_pre_neurons=len(np.array(bioneuron_info['weights']))
+		n_synapses=len(np.array(bioneuron_info['weights'])[0])
+		for n in range(ens_pre_neurons):
+			bahl.add_bias(bioneuron_info['bias'])
 			bahl.add_connection(n)
 			for i in range(n_synapses): #for each synapse connected to input neuron
-				section=bahl.cell.apical(np.array(bioneuroens_pre_neuronsfo['locations'])[n][i])
-				weight=np.array(bioneuroens_pre_neuronsfo['weights'])[n][i]
+				section=bahl.cell.apical(np.array(bioneuron_info['locations'])[n][i])
+				weight=np.array(bioneuron_info['weights'])[n][i]
 				bahl.add_synapse(n,bahl_op.P['synapse_type'],section,
 										weight,P['synapse_tau'],None)
+		# print bahl.bias
 		bahl.start_recording()
 		bahl_op.neurons.neurons[j].bahl=bahl
 
@@ -231,29 +265,32 @@ def build_connection(model,conn):
 		P=copy.copy(conn.post.neuron_type.P)
 		bahl_op=conn.post.neuron_type.father_op
 
-		if bahl_op.neurons.bioneuron_directory == None:
+		#if there's no saved information about this input connection, do an optimization
+		if conn.pre.label not in bahl_op.neurons.inputs:
 			P['ens_pre_neurons']=conn.pre.n_neurons
 			P['ens_pre_dim']=conn.pre.dimensions
 			P['ens_pre_min_rate']=conn.pre.max_rates.low
 			P['ens_pre_max_rate']=conn.pre.max_rates.high
 			P['ens_pre_seed']=conn.pre.seed
 			P['ens_pre_type']=str(conn.pre.neuron_type)
-			if isinstance(conn.pre.neuron_type,BahlNeuron):
-				P['ens_pre_label']=conn.pre.label+'/'
-			P['ens_label']=conn.post.label+'/'
+			P['ens_pre_label']=conn.pre.label
+			P['ens_label']=conn.post.label
 			P['ens_ideal_neurons']=conn.post.n_neurons
 			P['ens_ideal_dim']=conn.post.dimensions
 			P['ens_ideal_seed']=conn.post.seed
 			P['ens_ideal_min_rate']=conn.post.max_rates.low
 			P['ens_ideal_max_rate']=conn.post.max_rates.high
 			from optimize_bioneuron import optimize_bioneuron
-			bahl_op.neurons.bioneuron_directory=optimize_bioneuron(P)
-			filenames=bahl_op.neurons.bioneuron_directory+'filenames.txt'
-			with open(filenames,'r') as df:
-				bahl_op.neurons.filenames=json.load(df)
+			directory=optimize_bioneuron(P)
+			filenames_dir=directory+'filenames.txt'
+			with open(filenames_dir,'r') as df:
+				bahl_op.neurons.inputs[conn.pre.label]={'directory':directory,
+																'filenames':json.load(df)}
 
-		load_weights(P,bahl_op) 	#load weights into these operators
-		conn.post.neuron_type.save_optimization()	#save contents of filenames to the neuron
+		directory=bahl_op.neurons.inputs[conn.pre.label]['directory']
+		filenames=bahl_op.neurons.inputs[conn.pre.label]['filenames']
+		load_weights(P,conn.pre.label,bahl_op) 	#load weights into these operators
+		conn.post.neuron_type.save_optimization(conn.pre.label,directory,filenames)	#save contents of filenames to the neuron
 		model.add_op(TransmitSpikes(model.sig[conn]['in'],bahl_op,states=[model.time])) #setup spike transmission
 
 	else: #normal connection
@@ -266,9 +303,10 @@ class CustomSolver(nengo.solvers.Solver):
 	import ipdb
 	import copy
 
-	def __init__(self,P,conn):
+	def __init__(self,P,ens_pre,ens_post):
 		self.P=P
-		self.conn=conn #only used to grab the SimBahlOp operator
+		self.ens_pre=ens_pre #only used to grab the SimBahlOp operator
+		self.ens_post=ens_post
 		self.weights=False #decoders not weights
 		self.bahl_op=None
 		self.A=None
@@ -276,14 +314,23 @@ class CustomSolver(nengo.solvers.Solver):
 		self.decoders=None
 
 	def __call__(self,A,Y,rng=None,E=None): #function that gets called by the builder
-		'''preloaded spike approach: same as below, but saved from optimize_bioneuron'''
-		self.activities=self.conn.post.neuron_type.bio_rates
-		self.upsilon=self.conn.post.neuron_type.signal_in
+		'''
+		FALSE?
+		preloaded spike approach: load activities and eval_opints from optimize_bioneuron
+		only works in the case that 
+			(a) the current network is identical to the optimized network
+			(b) each bioensemble only receives input from one ens_pre.
+		If this isn't true, the activities of the bioensemble must be recalculated based on the
+		(ideal) spiking input of all ens_pres
+		'''
+		self.activities=self.ens_post.neuron_type.inputs[self.ens_pre.label]['ideal_rates']
+		# self.activities=self.ens_post.neuron_type.inputs[self.ens_pre.label]['bio_rates']
+		self.upsilon=self.ens_post.neuron_type.inputs[self.ens_pre.label]['signal_in']
 		self.solver=nengo.solvers.LstsqL2()
 		self.decoders,self.info=self.solver(self.activities.T,self.upsilon)
 		return self.decoders, dict()
 
-	 	'''spike-approach: feed an N-dim white noise signal, through a spiking pre LIF population,
+	 	'''spike-approach: feed an N-dim white noise signal, through each preceeding spiking LIF ensemble,
  		collect spikes from the bioneuron population, then construct multidimensional A and Y
  		NOTE: currently breaks bahlneuron_test simulation because NEURON references are not
  		properly cleared, or something'''

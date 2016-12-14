@@ -31,7 +31,7 @@ def prime_sinusoids(dt,t_final,dim):
 
     def sinusoids(t_final,primes,t):
         import numpy as np
-        return np.array([np.sin(t/t_final*2*np.pi*hz) for hz in primes])
+        return np.array([np.sin(t*2*np.pi*hz) for hz in primes])
 
     primes=primeno(dim)
     timesteps=np.arange(0,t_final,dt)
