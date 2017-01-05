@@ -52,6 +52,7 @@ class BahlNeuron(nengo.neurons.NeuronType):
 
 		def add_connection(self,idx):
 			self.synapses[idx]=[] #list of each synapse in this connection
+			#vecstim and netcons only used for optimization, spikes delivered with events for nengo
 			self.vecstim[idx]={'vstim':[],'vtimes':[]} #list of input spike times from this neuron
 			self.netcons[idx]=[] #list of netcon objects between input vecstim and synapses for this nrn
 
@@ -91,6 +92,7 @@ class BahlNeuron(nengo.neurons.NeuronType):
 			ideal_spikes.append(bioneuron_info['ideal_spikes'])
 			ideal_rates.append(bioneuron_info['ideal_rates'])
 			losses.append(bioneuron_info['loss'])
+		self.inputs[conn_pre_label]['directory']=directory
 		self.inputs[conn_pre_label]['indices']=np.array(indices)
 		self.inputs[conn_pre_label]['weights']=np.array(weights)
 		self.inputs[conn_pre_label]['locations']=np.array(locations)
@@ -101,7 +103,7 @@ class BahlNeuron(nengo.neurons.NeuronType):
 		self.inputs[conn_pre_label]['ideal_spikes']=np.array(ideal_spikes)
 		self.inputs[conn_pre_label]['ideal_rates']=np.array(ideal_rates)
 		self.inputs[conn_pre_label]['losses']=np.array(losses)
-		np.savez(directory+'/'+conn_pre_label+'_biodata.npz',
+		np.savez(directory+'/'+'biodata.npz',
 				indices=self.inputs[conn_pre_label]['indices'],
 				weights=self.inputs[conn_pre_label]['weights'],
 				locations=self.inputs[conn_pre_label]['locations'],
@@ -120,14 +122,16 @@ class BahlNeuron(nengo.neurons.NeuronType):
 		return np.ones(len(max_rates)),np.ones(len(max_rates))
 
 	def step_math(self,dt,spiked,neurons,voltage,time):
-		# if time==dt: neuron.init() #todo: prettier way to initialize first timestep without segfault
+		# if time==dt:
+		# 	# neuron.init() #todo: prettier way to initialize first timestep without segfault
+		# 	for nrn in neurons:
+		# 		nrn.bahl.start_recording()
 		desired_t=time*1000
 		# ipdb.set_trace()
 		'''runs NEURON only for 1st bioensemble in model...OK because transmit_spikes happend already?'''
 		neuron.run(desired_t) 
 		new_spiked=[]
 		new_voltage=[]
-		# print 'nengo time', time, 'neuron time', neuron.h.t, 't-dt', (time-dt)*1000
 		for nrn in neurons:
 			spike_times=np.round(np.array(nrn.bahl.spikes),decimals=1)
 			count=np.sum(spike_times>(time-dt)*1000)
@@ -217,6 +221,8 @@ class TransmitSpikes(Operator):
 					for nrn in self.neurons: #for each bioneuron
 						for syn in nrn.bahl.synapses[n]: #for each synapse conn. to input
 							syn.spike_in.event(1.0*time*1000) #add a spike at time t (ms)
+							# print 'event', 1.0*time*1000
+							# print 'weight', syn.weight
 		return step
 
 
@@ -235,7 +241,7 @@ def load_weights(P,conn_pre_label,bahl_op):
 				section=bahl.cell.apical(np.array(bioneuron_info['locations'])[n][i])
 				weight=np.array(bioneuron_info['weights'])[n][i]
 				bahl.add_synapse(n,bahl_op.P['synapse_type'],section,
-										weight,P['synapse_tau'],None)
+										weight,P['tau'],None)
 		# print bahl.bias
 		bahl.start_recording()
 		bahl_op.neurons.neurons[j].bahl=bahl
@@ -267,10 +273,13 @@ def build_connection(model,conn):
 
 		#if there's no saved information about this input connection, do an optimization
 		if conn.pre.label not in bahl_op.neurons.inputs:
+			# if hasattr(conn.pre.neuron_type, 'inputs'):
+				# P['pre_ens_pre_directory']=conn.pre.neuron_type.inputs[conn.pre.label]['directory']
 			P['ens_pre_neurons']=conn.pre.n_neurons
 			P['ens_pre_dim']=conn.pre.dimensions
 			P['ens_pre_min_rate']=conn.pre.max_rates.low
 			P['ens_pre_max_rate']=conn.pre.max_rates.high
+			P['ens_pre_radius']=conn.pre.radius
 			P['ens_pre_seed']=conn.pre.seed
 			P['ens_pre_type']=str(conn.pre.neuron_type)
 			P['ens_pre_label']=conn.pre.label
@@ -280,6 +289,7 @@ def build_connection(model,conn):
 			P['ens_ideal_seed']=conn.post.seed
 			P['ens_ideal_min_rate']=conn.post.max_rates.low
 			P['ens_ideal_max_rate']=conn.post.max_rates.high
+			P['ens_ideal_radius']=conn.post.radius
 			from optimize_bioneuron import optimize_bioneuron
 			directory=optimize_bioneuron(P)
 			filenames_dir=directory+'filenames.txt'
@@ -303,37 +313,146 @@ class CustomSolver(nengo.solvers.Solver):
 	import ipdb
 	import copy
 
-	def __init__(self,P,ens_pre,ens_post):
+	def __init__(self,P,ens_pre,ens_post,inputs,A,B):
 		self.P=P
 		self.ens_pre=ens_pre #only used to grab the SimBahlOp operator
 		self.ens_post=ens_post
+		self.inputs=inputs
+		self.A=np.array(A)
+		self.B=np.array(B)
 		self.weights=False #decoders not weights
 		self.bahl_op=None
-		self.A=None
-		self.Y=None
+		self.activities=None
+		self.upsilon=None
 		self.decoders=None
+		self.solver=nengo.solvers.LstsqL2()
+
+		'''Principle 3 for Adaptive Neurons with Supervision
+		Developed by Aaron Voelker
+		https://github.com/arvoelke/nengolib/blob/osc-adapt/
+			doc/notebooks/research/2d_oscillator_adaptation.ipynb
+		'''
+		if self.P['rate_decode']=='oracle':
+			import nengolib
+			from optimize_bioneuron import make_signal
+			print 'Decoder calculation...'
+			ABCD = (self.A, self.B, np.eye(2), [[0],[0]])
+			# Apply discrete principle 3 to the linear system (A, B, C, D)
+			msys = nengolib.synapses.ss2sim(map(np.asarray, ABCD), 
+									nengo.Lowpass(self.P['tau']), dt=self.P['dt_nengo'])
+			assert np.allclose(msys.C, np.eye(2))  # the remaining code assumes identity readout
+			assert np.allclose(msys.D, 0)  # and no passthrough
+			raw_signal=make_signal(self.P)
+			# raw_signal=np.zeros_like(raw_signal)
+			# raw_signal[0,:400]=0.3*np.ones(400)
+			# raw_signal[1,:300]=0.5*np.ones(300)
+
+			with nengo.Network() as decoder_model:
+				u = nengo.Node(lambda t: raw_signal[:,int(t/self.P['dt_nengo'])])
+				ideal_input=nengo.Node(size_in=len(msys))
+				ens_in=nengo.Ensemble(n_neurons=self.P['ens_pre_neurons'],dimensions=self.P['dim'],
+									seed=self.P['ens_pre_seed'],label='pre',
+									radius=self.P['radius_ideal'],
+									max_rates=nengo.dists.Uniform(self.P['min_ideal_rate'],
+																	self.P['max_ideal_rate']))
+				x_approx = nengo.Ensemble(self.ens_post.n_neurons,len(msys),
+									neuron_type=BahlNeuron(self.P,self.inputs),
+									# neuron_type=self.ens_post.neuron_type,
+									label=self.ens_post.label,seed=self.ens_post.seed,
+									radius=self.ens_post.radius,
+									max_rates=self.ens_post.max_rates)
+				x_direct = nengo.Ensemble(1,len(msys),neuron_type=nengo.Direct())
+				ideal_output = nengo.Node(size_in=len(msys))
+
+				nengo.Connection(u,ideal_input,synapse=None, transform=msys.B) #self.P['tau']
+				nengo.Connection(ideal_input, ens_in, synapse=None)
+				nengo.Connection(ens_in, x_approx, synapse=None) #does this mess up the method?
+				nengo.Connection(ideal_input, x_direct, synapse=None)
+				nengo.Connection(x_direct, ideal_output, synapse=None, transform=msys.A)
+				nengo.Connection(ideal_output,ideal_input,synapse=self.P['tau'])
+
+				p_u = nengo.Probe(u, synapse=None)
+				p_ideal_input = nengo.Probe(ideal_input, synapse=None)
+				p_ens_in=nengo.Probe(ens_in,synapse=self.P['tau'])
+				p_ideal_output = nengo.Probe(ideal_output, synapse=None)
+				p_approx_neurons = nengo.Probe(x_approx.neurons, 'spikes')
+
+
+			with nengo.Simulator(decoder_model, dt=self.P['dt_nengo']) as decoder_sim:
+				decoder_sim.run(self.P['t_train'])
+			neuron.init()
+
+			# lpf=nengo.Lowpass(self.P['kernel']['tau'])
+			lpf=nengo.Lowpass(self.P['tau'])
+			self.activities=lpf.filt(decoder_sim.data[p_approx_neurons],dt=self.P['dt_nengo'])
+			self.upsilon=lpf.filt(decoder_sim.data[p_ideal_output],dt=self.P['dt_nengo'])
+			self.decoders,self.info=self.solver(self.activities,self.upsilon)
+
+			import matplotlib.pyplot as plt
+			import seaborn as sns
+			from nengo.utils.matplotlib import rasterplot
+			sns.set(context='poster')
+			figure1, ((ax0,a),(ax1,b),(ax2,c),(ax3,d),(ax4,e)) = plt.subplots(5,2,sharex=True)
+			ax0.plot(decoder_sim.trange(),decoder_sim.data[p_u])
+			ax0.set(ylabel='u')
+			ax1.plot(decoder_sim.trange(),decoder_sim.data[p_ideal_input])
+			ax1.set(ylabel='ideal input')
+			ax2.plot(decoder_sim.trange(),decoder_sim.data[p_ens_in])
+			ax2.set(ylabel='ens_in')
+			rasterplot(decoder_sim.trange(),decoder_sim.data[p_approx_neurons],ax=ax3,use_eventplot=True)
+			ax3.set(ylabel='bio spikes')
+			ax4.plot(decoder_sim.trange(),self.activities)
+			ax4.set(ylabel='bio rates')
+			figure1.savefig('oracle.png')
+
+	 	'''spike-approach:'''
+ 		if self.P['rate_decode']=='simulate':
+			from optimize_bioneuron import make_signal
+			raw_signal=make_signal(self.P)
+
+			with nengo.Network() as decoder_model:
+				stim = nengo.Node(lambda t: raw_signal[:,int(t/self.P['dt_nengo'])])
+				pre=nengo.Ensemble(n_neurons=self.P['ens_pre_neurons'],dimensions=self.P['dim'],
+									seed=self.P['ens_pre_seed'],label='pre',
+									radius=self.P['radius_ideal'],
+									max_rates=nengo.dists.Uniform(self.P['min_ideal_rate'],
+																	self.P['max_ideal_rate']))
+				ideal = nengo.Ensemble(n_neurons=self.ens_post.n_neurons,
+									dimensions=self.P['dim'],
+									neuron_type=BahlNeuron(self.P,self.inputs),
+									label=self.ens_post.label,seed=self.ens_post.seed,
+									radius=self.ens_post.radius,
+									max_rates=self.ens_post.max_rates)
+
+				nengo.Connection(stim,pre,synapse=None)
+				nengo.Connection(pre,ideal,synapse=P['tau'])
+				# nengo.Connection(pre,ideal,synapse=P['tau'],transform=P['tau'])
+				# nengo.Connection(ideal,ideal,synapse=P['tau'])
+
+				p_stim=nengo.Probe(stim,synapse=None)
+				p_ideal_neurons=nengo.Probe(ideal.neurons,'spikes')
+
+			with nengo.Simulator(decoder_model, dt=self.P['dt_nengo']) as decoder_sim:
+				decoder_sim.run(self.P['t_train'])
+
+			lpf=nengo.Lowpass(self.P['tau'])
+			self.activities=lpf.filt(decoder_sim.data[p_ideal_neurons],dt=self.P['dt_nengo'])
+			self.upsilon=lpf.filt(decoder_sim.data[p_stim],dt=self.P['dt_nengo'])
+			self.decoders,self.info=self.solver(self.activities,self.upsilon)
 
 	def __call__(self,A,Y,rng=None,E=None): #function that gets called by the builder
 		'''
-		FALSE?
 		preloaded spike approach: load activities and eval_opints from optimize_bioneuron
-		only works in the case that 
-			(a) the current network is identical to the optimized network
-			(b) each bioensemble only receives input from one ens_pre.
-		If this isn't true, the activities of the bioensemble must be recalculated based on the
-		(ideal) spiking input of all ens_pres
 		'''
-		self.activities=self.ens_post.neuron_type.inputs[self.ens_pre.label]['ideal_rates']
-		# self.activities=self.ens_post.neuron_type.inputs[self.ens_pre.label]['bio_rates']
-		self.upsilon=self.ens_post.neuron_type.inputs[self.ens_pre.label]['signal_in']
-		self.solver=nengo.solvers.LstsqL2()
-		self.decoders,self.info=self.solver(self.activities.T,self.upsilon)
+		if self.P['rate_decode']=='ideal':
+			self.activities=self.ens_post.neuron_type.inputs[self.ens_pre.label]['ideal_rates']
+			self.upsilon=self.ens_post.neuron_type.inputs[self.ens_pre.label]['signal_in']
+			self.decoders,self.info=self.solver(self.activities.T,self.upsilon)
+		elif self.P['rate_decode']=='bio':
+			self.activities=self.ens_post.neuron_type.inputs[self.ens_pre.label]['bio_rates']
+			self.upsilon=self.ens_post.neuron_type.inputs[self.ens_pre.label]['signal_in']
+			self.decoders,self.info=self.solver(self.activities.T,self.upsilon)
 		return self.decoders, dict()
-
-	 	'''spike-approach: feed an N-dim white noise signal, through each preceeding spiking LIF ensemble,
- 		collect spikes from the bioneuron population, then construct multidimensional A and Y
- 		NOTE: currently breaks bahlneuron_test simulation because NEURON references are not
- 		properly cleared, or something'''
 
 		# '''1. Generate white noise signal'''
 		# print 'Computing A and Y...'

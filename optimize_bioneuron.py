@@ -70,7 +70,7 @@ def make_spikes_in(P,raw_signal):
 								dimensions=P['ens_pre_dim'],
 								max_rates=nengo.dists.Uniform(P['ens_pre_min_rate'],
 																P['ens_pre_max_rate']),
-								seed=P['ens_pre_seed'])
+								seed=P['ens_pre_seed'],radius=P['ens_pre_radius'],)
 		# '''? feed ideal with spikes from appropriate pre ensemble, which are loaded rather 
 		# that resimulated, becaues the pre population may be far from the input signal?
 		#No, input signal is supposed to represent the whole space that the pre ensemble must
@@ -79,9 +79,9 @@ def make_spikes_in(P,raw_signal):
 								dimensions=P['ens_ideal_dim'],
 								max_rates=nengo.dists.Uniform(P['ens_ideal_min_rate'],
 																P['ens_ideal_max_rate']),
-								seed=P['ens_ideal_seed'])
+								seed=P['ens_ideal_seed'],radius=P['ens_ideal_radius'],)
 		nengo.Connection(signal,pre,synapse=None)
-		nengo.Connection(pre,ideal,synapse=P['nengo_synapse'])
+		nengo.Connection(pre,ideal,synapse=P['tau'])
 		probe_signal = nengo.Probe(signal)
 		probe_pre = nengo.Probe(pre.neurons,'spikes')
 		probe_ideal = nengo.Probe(ideal.neurons,'spikes')
@@ -165,6 +165,7 @@ def get_rates(P,spikes):
 		return np.zeros_like(timesteps), np.zeros_like(timesteps)
 	rates=np.zeros_like(spike_train)
 	if P['kernel']['type'] == 'exp':
+		#todo - nengo.Lowpass()
 		tkern = np.arange(0,P['t_train']/20.0,P['dt_nengo'])
 		kernel = np.exp(-tkern/P['kernel']['tau'])
 		kernel /= kernel.sum()
@@ -314,7 +315,7 @@ def make_bioneuron(P,weights,locations,bias):
 			syn_type=P['synapse_type']
 			section=bioneuron.cell.apical(locations[n][i])
 			weight=weights[n][i]
-			tau=P['synapse_tau']
+			tau=P['tau']
 			bioneuron.add_synapse(n,syn_type,section,weight,tau)
 	#initialize recording attributes
 	bioneuron.start_recording()
@@ -408,17 +409,11 @@ def simulate(P):
 	lifdata=np.load(P['inputs']+'lifdata.npz')
 	signal_in=lifdata['signal_in']
 	spikes_ideal=lifdata['spikes_ideal'][:,P['bio_idx']]
-	spikes_in=lifdata['spikes_in']
-	# if P['ens_pre_type']=='BahlNeuron()':
-	# 	biodata=np.load(P['directory']+P['ens_pre_label']+'biodata.npz')
-	# 	spikes_in=biodata['bio_spikes']
-	# else:
-	# 	spikes_in=lifdata['spikes_in']
-		# lif_eval_points=lifdata['lif_eval_points'][:,P['bio_idx']]
-		# lif_activities=lifdata['lif_activities'][:,P['bio_idx']]
-		# gain_ideal=lifdata['gains'][P['bio_idx']]
-		# bias_ideal=lifdata['biases'][P['bio_idx']]
-		# encoders_ideal=lifdata['encoders'][P['bio_idx']]
+	if P['spikes_train'] == 'bio' and P['ens_pre_type']=='BahlNeuron()':
+		biodata=np.load(P['directory']+P['ens_pre_label']+'/pre/biodata.npz') #todo: hardcoded path
+		spikes_in=biodata['bio_spikes'].T
+	else:
+		spikes_in=lifdata['spikes_in']
 	bias=P['bias']
 	weights=np.zeros((P['ens_pre_neurons'],P['n_syn']))
 	locations=np.zeros((P['ens_pre_neurons'],P['n_syn']))
@@ -451,8 +446,10 @@ def optimize_bioneuron(P):
 	from pathos.multiprocessing import ProcessingPool as Pool
 	
 	P=copy.copy(P)
-	raw_signal=make_signal(P)
 	P['inputs']=P['directory']+P['ens_label']+'/'+P['ens_pre_label']+'/'
+	if os.path.exists(P['inputs']):
+		return P['inputs']
+	raw_signal=make_signal(P)
 	os.makedirs(P['inputs'])
 	os.chdir(P['inputs'])
 	make_spikes_in(P,raw_signal)
