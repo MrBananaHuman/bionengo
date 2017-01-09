@@ -24,31 +24,24 @@ def main():
 	# P2=copy.copy(P)
 	# P2['signal']={'type':'equalpower','max_freq':5.0,'mean':0.0,'std':0.5} #for signal test != train
 	# raw_signal=make_signal(P2)
-	inputs, inputs2 = None, None
-	raw_signal=np.zeros_like(raw_signal)
-	raw_signal[0,:1000]=0.5*np.ones(1000)
+	raw_signal2=np.zeros_like(raw_signal)
+	raw_signal2[0,:1000]=1.5*np.ones(1000)
 	# raw_signal[1,:300]=0.3*np.ones(300)
 
 	with nengo.Network() as model:
 		stim = nengo.Node(lambda t: raw_signal[:,int(t/P['dt_nengo'])]) #all dim, index at t
+		stim2 = nengo.Node(lambda t: raw_signal2[:,int(t/P['dt_nengo'])]) #all dim, index at t
 		ens_in=nengo.Ensemble(n_neurons=P['ens_pre_neurons'],dimensions=P['dim'],
 								seed=P['ens_pre_seed'],label='pre',
 								radius=P['radius_ideal'],
 								max_rates=nengo.dists.Uniform(P['min_ideal_rate'],
 																P['max_ideal_rate']))
-		# ens_in2=nengo.Ensemble(n_neurons=P['ens_pre_neurons'],dimensions=P['dim'],
-		# 						seed=P['ens_pre_seed'],label='pre2',
-		# 						max_rates=nengo.dists.Uniform(10,20))
-		# inputs=[
-		# 		{'label':ens_in.label,
-		# 			'directory':P['directory']+'ens_bio/pre/',
-		# 			'filenames':None},
-		# 		{'label':'ens_bio',
-		# 			'directory':P['directory']+'ens_bio/ens_bio/',
-		# 			'filenames':None},
-		# 		]
+		ens_in2=nengo.Ensemble(n_neurons=P['n_bio'],dimensions=P['dim'],
+								seed=P['ens_ideal_seed'],label='pre2',
+								max_rates=nengo.dists.Uniform(P['min_ideal_rate'],
+																P['max_ideal_rate']))
 		ens_bio=nengo.Ensemble(n_neurons=P['n_bio'],dimensions=P['dim'],
-								neuron_type=BahlNeuron(P,inputs),label='ens_bio',
+								neuron_type=BahlNeuron(P),label='ens_bio',
 								seed=P['ens_ideal_seed'],radius=P['radius_ideal'],
 								max_rates=nengo.dists.Uniform(P['min_ideal_rate'],
 																P['max_ideal_rate']))
@@ -57,13 +50,8 @@ def main():
 								radius=P['radius_ideal'],
 								max_rates=nengo.dists.Uniform(P['min_ideal_rate'],
 																P['max_ideal_rate']))
-		# inputs2=[
-		# 	{'label':ens_bio.label,
-		# 			'directory':P['directory']+'ens_bio2/ens_bio/',
-		# 			'filenames':None}
-		# 		]
 		# ens_bio2=nengo.Ensemble(n_neurons=P['n_bio'],dimensions=P['dim'],
-		# 						neuron_type=BahlNeuron(P,inputs2),label='ens_bio2',										
+		# 						neuron_type=BahlNeuron(P),label='ens_bio2',										
 		# 						seed=P['ens_ideal2_seed'],radius=P['radius_ideal'],
 		# 						max_rates=nengo.dists.Uniform(P['min_ideal_rate'],
 		# 														P['max_ideal_rate']))
@@ -76,24 +64,29 @@ def main():
 		node_lif_out=nengo.Node(None,size_in=P['dim'])
 
 		nengo.Connection(stim,ens_in,synapse=None)
+		nengo.Connection(stim2,ens_in2,synapse=None)
 		nengo.Connection(ens_in,ens_bio,synapse=None)
+		nengo.Connection(ens_in2,ens_bio,synapse=None)
 		# nengo.Connection(ens_in,ens_bio,synapse=None,transform=P['tau'])
 		nengo.Connection(ens_in,ens_lif,synapse=P['tau'])
+		nengo.Connection(ens_in2,ens_lif,synapse=P['tau'])
 		# nengo.Connection(ens_in,ens_lif,synapse=P['tau'],transform=P['tau'])
-		A=[[1,0],[0,1]]
-		B=[[1,0],[0,1]]
-		solver_ens_bio=CustomSolver(P,ens_in,ens_bio,inputs,A,B)
-		# nengo.Connection(ens_bio,ens_bio,solver=solver_ens_bio,synapse=P['tau'])
+		solver_ens_bio=CustomSolver(P,ens_in,ens_bio)
+		# nengo.Connection(ens_bio,ens_bio,solver=solver_ens_bio) #,synapse=P['tau']
 		# nengo.Connection(ens_lif,ens_lif,solver=solver_ens_bio,synapse=P['tau'])
+		# nengo.Connection(ens_lif,ens_lif,synapse=P['tau'])
 		nengo.Connection(ens_bio,node_bio_out,solver=solver_ens_bio,synapse=P['tau'])
-		nengo.Connection(ens_lif,node_lif_out,synapse=P['tau'],solver=solver_ens_bio)
-		# nengo.Connection(ens_bio,ens_bio2,solver=CustomSolver(P,ens_in,ens_bio,inputs),synapse=P['tau'])
+		# nengo.Connection(ens_lif,node_lif_out,synapse=P['tau'],solver=solver_ens_bio)
+		nengo.Connection(ens_lif,node_lif_out,synapse=P['tau'])
+		# nengo.Connection(ens_bio,ens_bio2,solver=CustomSolver(P,ens_in,ens_bio),synapse=P['tau'])
 		# nengo.Connection(ens_lif,ens_lif2,synapse=P['tau'])
-		# nengo.Connection(ens_bio2,node_bio_out,solver=CustomSolver(P,ens_bio,ens_bio2,inputs2),synapse=P['tau'])
+		# nengo.Connection(ens_bio2,node_bio_out,solver=CustomSolver(P,ens_bio,ens_bio2),synapse=P['tau'])
 		# nengo.Connection(ens_lif2,node_lif_out,synapse=P['tau'])
 
 		probe_stim=nengo.Probe(stim,synapse=None)
+		probe_stim2=nengo.Probe(stim2,synapse=None)
 		probe_in=nengo.Probe(ens_in,synapse=P['tau'])
+		probe_in2=nengo.Probe(ens_in2,synapse=P['tau'])
 		probe_in_spikes=nengo.Probe(ens_in.neurons,'spikes')
 		probe_bio_spikes=nengo.Probe(ens_bio.neurons,'spikes')
 		# probe_bio_spikes2=nengo.Probe(ens_bio2.neurons,'spikes')
@@ -101,7 +94,8 @@ def main():
 		# probe_lif_spikes2=nengo.Probe(ens_lif2.neurons,'spikes')
 		probe_bio=nengo.Probe(ens_bio,synapse=P['tau'],solver=solver_ens_bio)
 		# probe_bio2=nengo.Probe(ens_bio2,synapse=P['tau'],solver=))
-		probe_lif=nengo.Probe(ens_lif,synapse=P['tau'],solver=solver_ens_bio)
+		# probe_lif=nengo.Probe(ens_lif,synapse=P['tau'],solver=solver_ens_bio)
+		probe_lif=nengo.Probe(ens_lif,synapse=P['tau'])
 		# probe_lif2=nengo.Probe(ens_lif2,synapse=P['tau'],solver=)
 		probe_bio_out=nengo.Probe(node_bio_out,synapse=P['tau'])
 		probe_lif_out=nengo.Probe(node_lif_out,synapse=P['tau'])
@@ -114,12 +108,16 @@ def main():
 	# figure1, (ax1,ax2,ax3,ax4,ax5,ax6) = plt.subplots(6,1,sharex=True)
 	figure1, ((ax1,ax2),(ax01,ax02),(ax3,ax4),(ax5,ax6),(ax7,ax8)) = plt.subplots(5,2,sharex=True)
 	ax01.plot(sim.trange(),sim.data[probe_in])
+	ax01.plot(sim.trange(),sim.data[probe_in2])
 	ax01.set(ylabel='ens_in')
 	ax02.plot(sim.trange(),sim.data[probe_in])
+	ax02.plot(sim.trange(),sim.data[probe_in2])
 	ax02.set(ylabel='ens_in')
 	ax1.plot(sim.trange(),sim.data[probe_stim])
+	ax1.plot(sim.trange(),sim.data[probe_stim2])
 	ax1.set(ylabel='$x(t)$')
 	ax2.plot(sim.trange(),sim.data[probe_stim])
+	ax2.plot(sim.trange(),sim.data[probe_stim2])
 	ax2.set(ylabel='$x(t)$')
 	ax3.plot(sim.trange(),sim.data[probe_bio])
 	ax3.set(ylabel='ens_bio $\hat{x}(t)$')

@@ -59,7 +59,7 @@ def make_signal(P):
 	assert len(raw_signal) > 0, "signal type not specified"
 	return np.array(raw_signal)
 
-def make_spikes_in(P,raw_signal):
+def generate_ideal_spikes(P,raw_signal):
 	import nengo
 	import numpy as np
 	import pandas as pd
@@ -95,43 +95,6 @@ def make_spikes_in(P,raw_signal):
 			gains=gains, biases=biases, encoders=encoders)
 			# ideal_eval_points=eval_points,ideal_activities=activities)
 
-def make_spikes_in_recurrent(P,raw_signal):
-	import nengo
-	import numpy as np
-	import pandas as pd
-	import ipdb
-	with nengo.Network() as opt_model:
-		signal = nengo.Node(lambda t: raw_signal[:,int(t/P['dt_nengo'])]) #all dim, index at t
-		# pre = nengo.Ensemble(n_neurons=P['ens_pre_neurons'],
-		# 						dimensions=P['ens_pre_dim'],
-		# 						max_rates=nengo.dists.Uniform(P['ens_pre_min_rate'],
-		# 														P['ens_pre_max_rate']),
-		# 						seed=P['ens_pre_seed'],radius=P['ens_pre_radius'],)
-		ideal = nengo.Ensemble(n_neurons=P['ens_ideal_neurons'],
-								dimensions=P['ens_ideal_dim'],
-								max_rates=nengo.dists.Uniform(P['ens_ideal_min_rate'],
-																P['ens_ideal_max_rate']),
-								seed=P['ens_ideal_seed'],radius=P['ens_ideal_radius'],)
-		# nengo.Connection(signal,pre,synapse=None)
-		# nengo.Connection(pre,ideal,synapse=P['tau']) #need to multiply by B
-		nengo.Connection(signal,ideal,synapse=None) #need to multiply by B
-		nengo.Connection(ideal,ideal,synapse=P['tau']) #need to multiply by A
-		probe_signal = nengo.Probe(signal)
-		# probe_pre = nengo.Probe(pre.neurons,'spikes')
-		probe_ideal = nengo.Probe(ideal.neurons,'spikes')
-	with nengo.Simulator(opt_model,dt=P['dt_nengo']) as opt_sim:
-		opt_sim.run(P['t_train'])
-		# eval_points, activities = nengo.utils.ensemble.tuning_curves(ideal,opt_sim)
-	gains=opt_sim.data[ideal].gain
-	biases=opt_sim.data[ideal].bias
-	encoders=opt_sim.data[ideal].encoders
-	signal_in=opt_sim.data[probe_signal]
-	spikes_ideal=opt_sim.data[probe_ideal]
-	np.savez(P['inputs']+'lifdata.npz',
-			signal_in=signal_in,spikes_in=spikes_ideal,spikes_ideal=spikes_ideal,
-			gains=gains, biases=biases, encoders=encoders)
-			# ideal_eval_points=eval_points,ideal_activities=activities)
-
 def weight_rescale(location):
 	#interpolation
 	import numpy as np
@@ -144,13 +107,13 @@ def weight_rescale(location):
 	return scaled_weight
 
 def add_search_space(P,bio_idx):
-	#adds a hyperopt-distributed weight, location, NOT bias for each synapse
+	#adds a hyperopt-distributed weight, location, bias for each synapse
 	import numpy as np
 	import hyperopt
 	P['bio_idx']=bio_idx
 	P['weights']={}
 	P['locations']={}
-	# P['bias']=hyperopt.hp.uniform('b',P['bias_min'],P['bias_max'])
+	P['bias']=hyperopt.hp.uniform('b',P['bias_min'],P['bias_max'])
 	for n in range(P['ens_pre_neurons']):
 		for i in range(P['n_syn']): 
 			P['locations']['%s_%s'%(n,i)] =\
@@ -164,7 +127,7 @@ def add_search_space(P,bio_idx):
 			k_max_rates=300.0/np.average([P['ens_pre_min_rate'],P['ens_pre_max_rate']])
 			k=k_distance*k_neurons*k_max_rates
 			P['weights']['%s_%s'%(n,i)]=hyperopt.hp.uniform('w_%s_%s'%(n,i),-k*P['w_0'],k*P['w_0'])
-	return P
+	return P	
 
 '''
 ANALYSIS 
@@ -261,6 +224,69 @@ def compare_bio_ideal_rates(P,filenames):
 	plt.legend(loc='center right', prop={'size':6}, bbox_to_anchor=(1.1,0.8))
 	figure1.savefig('a(t)_bio_vs_ideal.png')
 
+# def make_tuning_curves(P,signal_in,encoders_ideal,biorates):
+# 	import numpy as np
+# 	import ipdb
+# 	# X=np.arange(-1.0,1.0,P['dx']) #eval points in X
+# 	#generate 1d evaluation points by dotting N dim signal with N dim ideal encoders
+# 	min_x_dot_e=np.min(np.dot(signal_in,encoders_ideal.T))
+# 	max_x_dot_e=np.max(np.dot(signal_in,encoders_ideal.T))
+# 	X=np.arange(min_x_dot_e,max_x_dot_e,P['dx'])
+# 	Hz=np.zeros_like(X) #firing rate for each eval point
+# 	timesteps=np.arange(0,P['t_train'],P['dt_nengo'])
+# 	for xi in range(len(X)-1):
+# 		ts_greater=np.where(X[xi] < signal_in)[0]
+# 		ts_smaller=np.where(signal_in < X[xi+1])[0]
+# 		ts=np.intersect1d(ts_greater,ts_smaller)
+# 		if ts.shape[0]>0: Hz[xi]=np.average(biorates[ts])
+# 	return X, Hz
+
+# def tuning_curve_loss(P,lif_eval_points,lif_activities,bio_eval_points,bio_activities):
+# 	import numpy as np
+# 	import ipdb
+# 	#shape of activities and Hz may be mismatched,
+# 	#so interpolate and slice activities for comparison
+# 	from scipy.interpolate import interp1d
+# 	f_bio_rate = interp1d(bio_eval_points,bio_activities)
+# 	f_lif_rate = interp1d(lif_eval_points,lif_activities)
+# 	x_min=np.maximum(np.min(bio_eval_points),np.min(lif_eval_points))
+# 	x_max=np.minimum(np.max(bio_eval_points),np.max(lif_eval_points))
+# 	#todo: generalize -1.0 to radius
+# 	assert x_min < -1.0, "x_min=%s don't extend to radius, interpolation fail" %x_min
+# 	assert x_max > 1.0, "x_max=%s don't extend to radius, interpolation fail" %xmax
+# 	X=np.arange(-1.0,1.0,P['dx'])
+# 	# X=np.arange(x_min,x_max,P['dx'])
+# 	loss=np.sqrt(np.average((f_bio_rate(X)-f_lif_rate(X))**2))
+# 	return X,f_bio_rate,f_lif_rate,loss
+
+# def plot_final_tuning_curves(P,biopop):
+# 	import numpy as np
+# 	import matplotlib.pyplot as plt
+# 	import seaborn as sns
+# 	import ipdb
+# 	import json
+# 	lifdata=np.load(P['directory']+'lifdata.npz')
+# 	signal_in=lifdata['signal_in']
+# 	spikes_in=lifdata['spikes_in']
+# 	lif_eval_points=lifdata['lif_eval_points'].ravel()
+# 	lif_activities=lifdata['lif_activities']
+# 	losses=[]
+# 	sns.set(context='poster')
+# 	figure1, ax1 = plt.subplots(1, 1)
+# 	ax1.set(xlabel='x',ylabel='firing rate (Hz)')
+# 	for bio_idx in range(P['n_bio']):
+# 		biospikes, biorates=get_rates(P,np.array(biopop[bio_idx]['spike_times']))
+# 		bio_eval_points, bio_activities = make_tuning_curves(P,signal_in,biorates)
+# 		X,f_bio_rate,f_lif_rate,loss=tuning_curve_loss(
+# 				P,lif_eval_points,lif_activities[:,bio_idx],
+# 				bio_eval_points,bio_activities)
+# 		lifplot=ax1.plot(X,f_bio_rate(X),linestyle='-')
+# 		bioplot=ax1.plot(X,f_lif_rate(X),linestyle='--',color=lifplot[0].get_color())
+# 		losses.append(loss)
+# 	ax1.set(ylim=(0,60))
+# 	figure1.savefig('biopop_tuning_curves.png')
+# 	plt.close('all')
+
 
 '''
 BIONEURON METHODS 
@@ -268,80 +294,41 @@ BIONEURON METHODS
 '''
 
 
-class Bahl():
-	def __init__(self,P,bias,locations,weights):
-		import numpy as np
-		import neuron
-		from synapses import ExpSyn, Exp2Syn
-		import ipdb
-		# neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc')
-		neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc')
-		self.cell = neuron.h.Bahl()
-		self.bias = bias
-		self.bias_current = neuron.h.IClamp(self.cell.soma(0.5))
-		self.bias_current.delay = 0
-		self.bias_current.dur = 1e9  # TODO; limits simulation time
-		self.bias_current.amp = self.bias
-		self.synapses = {P['ens_pre_label']:np.empty((P['ens_pre_neurons'],P['n_syn']),dtype=object)}
-		self.vectimes = {P['ens_pre_label']:np.empty((P['ens_pre_neurons']),dtype=object)}
-		self.vecstim = {P['ens_pre_label']:np.empty((P['ens_pre_neurons']),dtype=object)}
-		self.netcons = {P['ens_pre_label']:np.empty((P['ens_pre_neurons'],P['n_syn']),dtype=object)}
-		# self.synapses = {P['ens_pre_label']:{}}
-		# self.vectimes = {P['ens_pre_label']:{}}
-		# self.vecstim = {P['ens_pre_label']:{}}
-		# self.netcons = {P['ens_pre_label']:{}}
-		for n in range(P['ens_pre_neurons']):
-			for s in range(P['n_syn']):
-				section=self.cell.apical(locations[n][s])
-				weight=weights[n][s]
-				synapse=ExpSyn(section,weight,P['tau'])
-				self.synapses[P['ens_pre_label']][n][s]=synapse
-		# for a in range(P['ens_pre_neurons']):
-		# 	self.synapses[P['ens_pre_label']][a]=[]
-		# 	self.vecstim[P['ens_pre_label']][a]=[]
-		# 	self.vectimes[P['ens_pre_label']][a]=[]
-		# 	self.netcons[P['ens_pre_label']][a]=[]
-		# for n in range(P['ens_pre_neurons']):
-		# 	for s in range(P['n_syn']):
-		# 		section=self.cell.apical(locations[n][s])
-		# 		weight=weights[n][s]
-		# 		synapse=ExpSyn(section,weight,P['tau'])
-		# 		self.synapses[P['ens_pre_label']][n].append(synapse)		
-		self.v_record = neuron.h.Vector()
-		self.v_record.record(self.cell.soma(0.5)._ref_v)
-		self.ap_counter = neuron.h.APCount(self.cell.soma(0.5))
-		self.t_record = neuron.h.Vector()
-		self.t_record.record(neuron.h._ref_t)
-		self.spikes = neuron.h.Vector()
-		self.ap_counter.record(neuron.h.ref(self.spikes))
+def make_bioneuron(P,weights,locations,bias):
+	import numpy as np
+	from neurons import Bahl
+	bioneuron=Bahl()
+	#make connections and populate with synapses
+	for n in range(P['ens_pre_neurons']):
+		bioneuron.add_bias(bias)
+		bioneuron.add_connection(n)
+		for i in range(P['n_syn']):
+			syn_type=P['synapse_type']
+			section=bioneuron.cell.apical(locations[n][i])
+			weight=weights[n][i]
+			tau=P['tau']
+			bioneuron.add_synapse(n,syn_type,section,weight,tau)
+	#initialize recording attributes
+	bioneuron.start_recording()
+	return bioneuron
 
-	def connect_vecstim(self,P,spikes_in):
-		import numpy as np
-		import neuron
-		for n in range(spikes_in.shape[1]): #n_inputs
-			self.vecstim[P['ens_pre_label']][n]=neuron.h.VecStim() #artificial spiking cell object
-			spike_times_ms=list(1000*P['dt_nengo']*np.nonzero(spikes_in[:,n])[0])
-			self.vectimes[P['ens_pre_label']][n]=neuron.h.Vector(spike_times_ms) #list of input spike times
-			self.vecstim[P['ens_pre_label']][n].play(self.vectimes[P['ens_pre_label']][n])
-			for s in range(len(self.synapses[P['ens_pre_label']][n])):
-				syn=self.synapses[P['ens_pre_label']][n][s]
-				netcon=neuron.h.NetCon(self.vecstim[P['ens_pre_label']][n],syn.syn)
-				netcon.weight[0]=abs(syn.weight)
-				self.netcons[P['ens_pre_label']][n][s]=netcon
-
-	# def connect_vecstim(self,P,spikes_in):
-	# 	import numpy as np
-	# 	import neuron
-	# 	for n in range(spikes_in.shape[1]): #n_inputs
-	# 		self.vecstim[P['ens_pre_label']][n].append(neuron.h.VecStim()) #artificial spiking cell object
-	# 		spike_times_ms=list(1000*P['dt_nengo']*np.nonzero(spikes_in[:,n])[0])
-	# 		self.vectimes[P['ens_pre_label']][n].append(neuron.h.Vector(spike_times_ms)) #list of input spike times
-	# 		self.vecstim[P['ens_pre_label']][n][-1].play(self.vectimes[P['ens_pre_label']][n][-1])
-	# 		for s in range(len(self.synapses[P['ens_pre_label']][n])):
-	# 			syn=self.synapses[P['ens_pre_label']][n][s]
-	# 			netcon=neuron.h.NetCon(self.vecstim[P['ens_pre_label']][n][-1],syn.syn)
-	# 			netcon.weight[0]=abs(syn.weight)
-	# 			self.netcons[P['ens_pre_label']][n].append(netcon)
+def connect_bioneuron(P,spikes_in,bioneuron):
+	import numpy as np
+	import neuron
+	import ipdb
+	for n in range(P['ens_pre_neurons']):
+		#create spike time vectors and an artificial spiking cell that delivers them
+		vstim=neuron.h.VecStim()
+		bioneuron.vecstim[n]['vstim'].append(vstim)
+		spike_times_ms=list(1000*P['dt_nengo']*np.nonzero(spikes_in[:,n])[0]) #timely
+		vtimes=neuron.h.Vector(spike_times_ms)
+		bioneuron.vecstim[n]['vtimes'].append(vtimes)
+		bioneuron.vecstim[n]['vstim'][-1].play(bioneuron.vecstim[n]['vtimes'][-1])
+		#connect the VecStim to each synapse
+		for syn in bioneuron.synapses[n]:
+			netcon=neuron.h.NetCon(bioneuron.vecstim[n]['vstim'][-1],syn.syn)
+			netcon.weight[0]=abs(syn.weight)
+			bioneuron.netcons[n].append(netcon)
 
 def run_bioneuron(P):
 	import neuron
@@ -357,6 +344,9 @@ def export_bioneuron(P,run_id,bias,weights,locations,signal_in,spikes_in,
 		'weights':weights.tolist(),
 		'locations': locations.tolist(),
 		'bias': bias,
+		# 'gain_ideal':gain_ideal,
+		# 'bias_ideal':bias_ideal,
+		# 'encoders_ideal':encoders_ideal.tolist(),
 		'signal_in': signal_in.tolist(),
 		'spikes_in':spikes_in.tolist(),
 		'ideal_spikes': ideal_spikes.tolist(),
@@ -365,7 +355,8 @@ def export_bioneuron(P,run_id,bias,weights,locations,signal_in,spikes_in,
 		'bio_rates': bio_rates.tolist(),
 		'loss': loss,
 		}
-	with open(P['inputs']+run_id+'_bioneuron_%s.json'%P['bio_idx'], 'w') as data_file:
+	with open(P['inputs']+run_id+
+				'_bioneuron_%s.json'%P['bio_idx'], 'w') as data_file:
 		json.dump(to_export, data_file)
 
 '''
@@ -396,7 +387,10 @@ def run_hyperopt(P):
 
 def simulate(P):
 	import numpy as np
+	import neuron
 	import hyperopt
+	import json
+	import os
 	import timeit
 	import gc
 	import ipdb
@@ -406,12 +400,12 @@ def simulate(P):
 	lifdata=np.load(P['inputs']+'lifdata.npz')
 	signal_in=lifdata['signal_in']
 	spikes_ideal=lifdata['spikes_ideal'][:,P['bio_idx']]
-	if P['spikes_train']=='bio' and P['ens_pre_type']=='BahlNeuron()' and P['ens_pre_label']!=P['ens_label']:
+	if P['spikes_train'] == 'bio' and P['ens_pre_type']=='BahlNeuron()':
 		biodata=np.load(P['directory']+P['ens_pre_label']+'/pre/biodata.npz') #todo: hardcoded path
 		spikes_in=biodata['bio_spikes'].T
 	else:
 		spikes_in=lifdata['spikes_in']
-	bias=P['biases'][P['bio_idx']]
+	bias=P['bias']
 	weights=np.zeros((P['ens_pre_neurons'],P['n_syn']))
 	locations=np.zeros((P['ens_pre_neurons'],P['n_syn']))
 	for n in range(P['ens_pre_neurons']):
@@ -419,8 +413,8 @@ def simulate(P):
 			weights[n][i]=P['weights']['%s_%s'%(n,i)]
 			locations[n][i]=P['locations']['%s_%s'%(n,i)]
 
-	bioneuron = Bahl(P,bias,locations,weights)
-	bioneuron.connect_vecstim(P,spikes_in)
+	bioneuron = make_bioneuron(P,weights,locations,bias)
+	connect_bioneuron(P,spikes_in,bioneuron)
 	run_bioneuron(P)
 	
 	bio_spikes, bio_rates=get_rates(P,np.round(np.array(bioneuron.spikes),decimals=3))
@@ -432,10 +426,10 @@ def simulate(P):
 	del bioneuron
 	gc.collect()
 	stop=timeit.default_timer()
-	print 'Simulate Runtime - %s sec' %(stop-start)
+	# print 'Simulate Runtime - %s sec' %(stop-start)
 	return {'loss': loss, 'run_id':run_id, 'status': hyperopt.STATUS_OK}
 
-def optimize_bioneuron(P):
+def optimize_feedforward(P):
 	import json
 	import copy
 	import ipdb
@@ -449,10 +443,7 @@ def optimize_bioneuron(P):
 	raw_signal=make_signal(P)
 	os.makedirs(P['inputs'])
 	os.chdir(P['inputs'])
-	if P['ens_pre_label'] != P['ens_label']:
-		make_spikes_in(P,raw_signal) #feedforward connection
-	else:
-		make_spikes_in_recurrent(P,raw_signal) #feedforward connection
+	generate_ideal_spikes(P,raw_signal) #feedforward connection
 	P_list=[]
 	pool = Pool(nodes=P['n_processes'])
 	for bio_idx in range(P['n_bio']):
