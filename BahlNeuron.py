@@ -13,28 +13,35 @@ class BahlNeuron(nengo.neurons.NeuronType):
 	def __init__(self,P):
 		super(BahlNeuron,self).__init__()
 		self.P=P
+
 	def create(self,bio_idx,bias):
-		return self.Bahl(self.P,bio_idx,bias)
+		return self.Bahl(bio_idx,bias)
 
 	class Bahl():
 		import numpy as np
 		import neuron
 		from synapses import ExpSyn, Exp2Syn
 		import os
-		def __init__(self,P,bio_idx,bias):
+		def __init__(self,bio_idx,bias):
 			# neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc')
 			neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc') #todo: hardcoded path
-			self.cell = neuron.h.Bahl()
 			self.bio_idx=bio_idx
 			self.bias = bias
-			self.bias_current = neuron.h.IClamp(self.cell.soma(0.5))
-			self.bias_current.delay = 0
-			self.bias_current.dur = 1e9  #todo: limits simulation time
-			self.bias_current.amp = self.bias
 			self.synapses = {}
 			self.vectimes = {}
 			self.vecstim = {}
 			self.netcons = {}
+			# self.add_cell()
+			# self.start_recording()
+		#creating cells in init() makes optimization run extra neurons;
+		#instead call this in build_connection()
+		def add_cell(self): 
+			self.cell = neuron.h.Bahl()
+		def start_recording(self):
+			self.bias_current = neuron.h.IClamp(self.cell.soma(0.5))
+			self.bias_current.delay = 0
+			self.bias_current.dur = 1e9  #todo: limits simulation time
+			self.bias_current.amp = self.bias
 			self.v_record = neuron.h.Vector()
 			self.v_record.record(self.cell.soma(0.5)._ref_v)
 			self.ap_counter = neuron.h.APCount(self.cell.soma(0.5))
@@ -50,12 +57,7 @@ class BahlNeuron(nengo.neurons.NeuronType):
 		return np.ones(len(max_rates)),np.ones(len(max_rates))
 
 	def step_math(self,dt,spiked,neurons,voltage,time):
-		# if time==dt:
-		# 	# neuron.init() #todo: prettier way to initialize first timestep without segfault
-		# 	for nrn in neurons:
-		# 		nrn.bahl.start_recording()
 		desired_t=time*1000
-		# ipdb.set_trace()
 		'''runs NEURON only for 1st bioensemble in model...OK because transmit_spikes happend already?'''
 		neuron.run(desired_t) 
 		new_spiked=[]
@@ -66,12 +68,8 @@ class BahlNeuron(nengo.neurons.NeuronType):
 			new_spiked.append(count)
 			volt=np.array(nrn.v_record)[-1] #fails if neuron.init() not called at right times
 			new_voltage.append(volt)
-			# if len(spike_times)>0: print 'spike time', spike_times[-1], 'voltage', volt
-			# else: print 'spike time', 0, 'voltage', volt
 		spiked[:]=np.array(new_spiked)/dt
 		voltage[:]=np.array(new_voltage)
-		# print spiked
-		# ipdb.set_trace()
 
 '''
 Builder #############################################################################3
@@ -105,6 +103,12 @@ class SimBahlNeuron(Operator):
 			self.neurons.step_math(dt,output,self.neurons.neurons,voltage,time)
 		return step_nrn
 
+	def init_cells(self):
+		for bioneuron in self.neurons.neurons:
+			if not hasattr(bioneuron,'cell'):
+				bioneuron.add_cell()
+				bioneuron.start_recording()
+
 	def init_connection(self,ens_pre_label,ens_pre_neurons,n_syn):
 		for bioneuron in self.neurons.neurons:
 			bioneuron.synapses[ens_pre_label]=np.empty((ens_pre_neurons,n_syn),dtype=object)
@@ -126,16 +130,6 @@ class SimBahlNeuron(Operator):
 					weight=weights[n][s]
 					synapse=ExpSyn(section,weight,self.P['tau'])
 					bioneuron.synapses[ens_pre_label][n][s]=synapse
-
-	# def start_recording(self):
-	# 	for bioneuron in self.neurons.neurons:
-	# 		bioneuron.v_record = neuron.h.Vector()
-	# 		bioneuron.v_record.record(bioneuron.cell.soma(0.5)._ref_v)
-	# 		bioneuron.ap_counter = neuron.h.APCount(bioneuron.cell.soma(0.5))
-	# 		bioneuron.t_record = neuron.h.Vector()
-	# 		bioneuron.t_record.record(neuron.h._ref_t)
-	# 		bioneuron.spikes = neuron.h.Vector()
-	# 		bioneuron.ap_counter.record(neuron.h.ref(bioneuron.spikes))
 
 	def save_optimization(self,conn_pre_label):
 		indices=[]
@@ -207,8 +201,6 @@ class TransmitSpikes(Operator):
 					for nrn in self.neurons: #for each bioneuron
 						for syn in nrn.synapses[self.ens_pre_label][n]: #for each synapse conn. to input
 							syn.spike_in.event(1.0*time*1000) #add a spike at time t (ms)
-							# print 'event', 1.0*time*1000
-							# print 'weight', syn.weight
 		return step
 
 @Builder.register(BahlNeuron)
@@ -238,9 +230,7 @@ def build_connection(model,conn):
 
 		#if there's no saved information about this input connection, do an optimization
 		if conn.pre.label not in bahl_op.inputs:
-			# from optimize_bioneuron import optimize_bioneuron
-			from optimize_feedforward import optimize_feedforward
-			bahl_op.init_connection(conn.pre.label,conn.pre.n_neurons,P['n_syn'])
+			from optimize_bioneuron import optimize_bioneuron
 			P['ens_pre_neurons']=conn.pre.n_neurons
 			P['ens_pre_dim']=conn.pre.dimensions
 			P['ens_pre_min_rate']=conn.pre.max_rates.low
@@ -257,17 +247,18 @@ def build_connection(model,conn):
 			P['ens_ideal_max_rate']=conn.post.max_rates.high
 			P['ens_ideal_radius']=conn.post.radius
 			P['biases']=[bahl_op.neurons.neurons[n].bias for n in range(len(bahl_op.neurons.neurons))]
-			# directory=optimize_bioneuron(P)
-			directory=optimize_feedforward(P)
+			directory=optimize_bioneuron(P)
 			filenames_dir=directory+'filenames.txt'
 			with open(filenames_dir,'r') as df:
 				bahl_op.inputs[conn.pre.label]={'directory':directory,'filenames':json.load(df)}
 
 		#load weights and locations into the neurons contained in bahl_op.neurons,
 		#save contents of filenames to operator.inputs, and setup spike transmission
+		bahl_op.init_cells()
+		bahl_op.init_connection(conn.pre.label,conn.pre.n_neurons,P['n_syn'])
 		bahl_op.load_weights(conn.pre.label) 
 		bahl_op.save_optimization(conn.pre.label)
-		model.add_op(TransmitSpikes(P['ens_pre_label'],model.sig[conn]['in'],
+		model.add_op(TransmitSpikes(conn.pre.label,model.sig[conn]['in'],
 									bahl_op,states=[model.time]))
 
 	else: #normal connection

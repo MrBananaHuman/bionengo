@@ -24,13 +24,17 @@ def ch_dir():
 	os.chdir(datadir) 
 	return datadir
 
-def make_signal(P):
+def make_signal(P,train_or_test):
 	""" Returns: array indexed by t when called from a nengo Node"""
 	import signals
 	import numpy as np
-	sP=P['signal']
 	dt=P['dt_nengo']
-	t_final=P['t_train']+dt #why is this extra step necessary?
+	if train_or_test == 'train':
+		sP=P['signal_train']
+		t_final=P['t_train']+dt #why is this extra step necessary?
+	elif train_or_test == 'test':
+		sP=P['signal_test']
+		t_final=P['t_test']+dt #why is this extra step necessary?
 	if sP['type']=='prime_sinusoids':
 		raw_signal=signals.prime_sinusoids(dt,t_final,P['dim'])
 		return raw_signal
@@ -81,15 +85,15 @@ def make_spikes_in(P,raw_signal):
 		probe_signal = nengo.Probe(signal)
 		probe_pre = nengo.Probe(pre.neurons,'spikes')
 		probe_ideal = nengo.Probe(ideal.neurons,'spikes')
-	with nengo.Simulator(opt_model,dt=P['dt_nengo']) as opt_sim:
-		opt_sim.run(P['t_train'])
-		# eval_points, activities = nengo.utils.ensemble.tuning_curves(ideal,opt_sim)
-	gains=opt_sim.data[ideal].gain
-	biases=opt_sim.data[ideal].bias
-	encoders=opt_sim.data[ideal].encoders
-	signal_in=opt_sim.data[probe_signal]
-	spikes_in=opt_sim.data[probe_pre]
-	spikes_ideal=opt_sim.data[probe_ideal]
+	with nengo.Simulator(opt_model,dt=P['dt_nengo']) as opt_test:
+		opt_test.run(P['t_train'])
+		# eval_points, activities = nengo.utils.ensemble.tuning_curves(ideal,opt_test)
+	gains=opt_test.data[ideal].gain
+	biases=opt_test.data[ideal].bias
+	encoders=opt_test.data[ideal].encoders
+	signal_in=opt_test.data[probe_signal]
+	spikes_in=opt_test.data[probe_pre]
+	spikes_ideal=opt_test.data[probe_ideal]
 	np.savez(P['inputs']+'lifdata.npz',
 			signal_in=signal_in,spikes_in=spikes_in,spikes_ideal=spikes_ideal,
 			gains=gains, biases=biases, encoders=encoders)
@@ -119,14 +123,14 @@ def make_spikes_in_recurrent(P,raw_signal):
 		probe_signal = nengo.Probe(signal)
 		# probe_pre = nengo.Probe(pre.neurons,'spikes')
 		probe_ideal = nengo.Probe(ideal.neurons,'spikes')
-	with nengo.Simulator(opt_model,dt=P['dt_nengo']) as opt_sim:
-		opt_sim.run(P['t_train'])
-		# eval_points, activities = nengo.utils.ensemble.tuning_curves(ideal,opt_sim)
-	gains=opt_sim.data[ideal].gain
-	biases=opt_sim.data[ideal].bias
-	encoders=opt_sim.data[ideal].encoders
-	signal_in=opt_sim.data[probe_signal]
-	spikes_ideal=opt_sim.data[probe_ideal]
+	with nengo.Simulator(opt_model,dt=P['dt_nengo']) as opt_test:
+		opt_test.run(P['t_train'])
+		# eval_points, activities = nengo.utils.ensemble.tuning_curves(ideal,opt_test)
+	gains=opt_test.data[ideal].gain
+	biases=opt_test.data[ideal].bias
+	encoders=opt_test.data[ideal].encoders
+	signal_in=opt_test.data[probe_signal]
+	spikes_ideal=opt_test.data[probe_ideal]
 	np.savez(P['inputs']+'lifdata.npz',
 			signal_in=signal_in,spikes_in=spikes_ideal,spikes_ideal=spikes_ideal,
 			gains=gains, biases=biases, encoders=encoders)
@@ -432,7 +436,7 @@ def simulate(P):
 	del bioneuron
 	gc.collect()
 	stop=timeit.default_timer()
-	print 'Simulate Runtime - %s sec' %(stop-start)
+	# print 'Simulate Runtime - %s sec' %(stop-start)
 	return {'loss': loss, 'run_id':run_id, 'status': hyperopt.STATUS_OK}
 
 def optimize_bioneuron(P):
@@ -446,7 +450,7 @@ def optimize_bioneuron(P):
 	P['inputs']=P['directory']+P['ens_label']+'/'+P['ens_pre_label']+'/'
 	if os.path.exists(P['inputs']):
 		return P['inputs']
-	raw_signal=make_signal(P)
+	raw_signal=make_signal(P,'train')
 	os.makedirs(P['inputs'])
 	os.chdir(P['inputs'])
 	if P['ens_pre_label'] != P['ens_label']:

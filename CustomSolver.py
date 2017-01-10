@@ -41,7 +41,7 @@ class CustomSolver(nengo.solvers.Solver):
 									nengo.Lowpass(self.P['tau']), dt=self.P['dt_nengo'])
 			assert np.allclose(msys.C, np.eye(2))  # the remaining code assumes identity readout
 			assert np.allclose(msys.D, 0)  # and no passthrough
-			raw_signal=make_signal(self.P)
+			raw_signal=make_signal(self.P,'train')
 			# raw_signal=np.zeros_like(raw_signal)
 			# raw_signal[0,:400]=0.3*np.ones(400)
 			# raw_signal[1,:300]=0.5*np.ones(300)
@@ -108,7 +108,7 @@ class CustomSolver(nengo.solvers.Solver):
 	 	3. gather activities, set eval points as the decoded input values
 	 	plus the decoded recurrent values'''
  		if self.P['rate_decode']=='simulate':
-			raw_signal=make_signal(self.P)
+			raw_signal=make_signal(self.P,'train')
 			with nengo.Network() as decoder_model:
 				stim = nengo.Node(lambda t: raw_signal[:,int(t/self.P['dt_nengo'])])
 				pre=nengo.Ensemble(n_neurons=self.P['ens_pre_neurons'],dimensions=self.P['dim'],
@@ -117,7 +117,7 @@ class CustomSolver(nengo.solvers.Solver):
 									max_rates=nengo.dists.Uniform(self.P['min_ideal_rate'],
 																	self.P['max_ideal_rate']))
 				bio = nengo.Ensemble(n_neurons=self.ens_post.n_neurons,
-									neuron_type=BahlNeuron(self.P,self),
+									neuron_type=BahlNeuron(self.P),
 									# neuron_type=nengo.LIF(),
 									dimensions=self.P['dim'],
 									label=self.ens_post.label,seed=self.ens_post.seed,
@@ -135,7 +135,6 @@ class CustomSolver(nengo.solvers.Solver):
 			self.activities=lpf.filt(decoder_sim.data[p_bio_neurons],dt=self.P['dt_nengo'])
 			self.upsilon=lpf.filt(decoder_sim.data[p_stim],dt=self.P['dt_nengo'])
 			self.decoders,self.info=self.solver(self.activities,self.upsilon)
-			# self.decoders*=(1-P['tau']) #but whyyyyy?
 
 	def __call__(self,A,Y,rng=None,E=None): #function that gets called by the builder
 		'''
