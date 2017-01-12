@@ -1,47 +1,42 @@
 {
-	't_sample':1.0,
-	'dt':0.0001,
-	'signal':
-		{'type':'equalpower','max_freq':10.0,'mean':0.0,'std':1.0},
-		#{'type':'constant','value':1.0},
-		#{'type':'pink_noise','mean':0.0,'std':1.0},
-		#{'type':'poisson','mean_freq':5.0,'max_freq':10.0},
-		#{'type':'switch','max_freq':10.0,},
-		#{'type':'white_binary','mean':0.0,'std':1.0},
-		#{'type':'poisson_binary','mean_freq':5.0,'max_freq':10.0,'low':-1.0,'high':1.0},
-		#{'type':'white'},
-	'min_lif_rate':40,
-	'max_lif_rate':60,
+	'dt_nengo':0.001,
+	'dt_neuron':0.0001,
+	'ens_pre_neurons':50,
+	'n_bio':30,
+	'n_syn':5,
+	'dim':1,
+	'ens_pre_seed':222,
+	'ens_ideal_seed':333,
+	'ens_ideal2_seed':444,
+	'min_ideal_rate':60,
+	'max_ideal_rate':80,
+	'radius_ideal':1,
+	'tau':0.05,
+	'synapse_type':'ExpSyn',
 
-	'n_bio':5,
-	'n_lif':50, #255 +/- 13 according to Markram et al 2015
-	'n_syn':5, #5.5 +/- 1.1 according to Ramaswamy et al 2012
-	'w_0':0.0005,
-	'synapse_dist':
-		'random',
-		#'optimized',
-		#'soma',
-		#'apical',
-		#'tuft',
-	'synapse_type':
-		'ExpSyn',
-		#'Exp2Syn',
-	'synapse_tau': 0.01,
-	'synapse_tau2': 0.005, #rise time constant for exp2syn
-	'bias_min':-3.0,
-	'bias_max':3.0,
-	'n_seg': 5, #number of segments in compartmental neuron model, helps hyperopt
+	't_train':10.0,
+	't_test':2.0,
+	'evals':300,
+	'directory':None, 
+	'directory':'/home/pduggins/bionengo/data/UPPZNAW5K/', #1D_integrator
+	'signal_train': 
+		#{'type':'prime_sinusoids'},
+		{'type':'equalpower','max_freq':3.0,'mean':0.0,'std':0.75},
+	'signal_test':
+		#{'type':'prime_sinusoids'},
+		{'type':'equalpower','max_freq':3.0,'mean':0.0,'std':0.75},
 
-	'kernel': #for smoothing spikes to calculate rate for tuning curve
+	'kernel': #for smoothing spikes to calculate loss and activities
+		{'type':'lowpass','tau':0.05},
 		#{'type':'exp','tau':0.02},
-		{'type':'gauss','sigma':0.01,},
-		#{'type':'alpha','tau':0.1},
-		#{'type':'isi_smooth','sigma':0.007}, #TODO
-	'dx':0.05,
-	'loss_cutoff':0.1,
+		#{'type':'gauss','sigma':0.02,},
 
-	'max_evals':3000,
-	'n_processes':5,
-	'hyperopt_algo':'random',
+	'w_0':0.001,
+	'bias_min':-1.0,
+	'bias_max':1.0,
+	'n_seg': 5,
+	'n_processes':10,
 
+	'spikes_train':'ideal', #use spiking output of pre_bio vs. pre_lif to train next ens
+	'rate_decode':'bio', #calculate decoders: preloaded 'bio' vs. 'ideal', 'oracle', 'simulate'
 }
