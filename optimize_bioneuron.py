@@ -81,7 +81,7 @@ def make_spikes_in(P,raw_signal):
 																P['ens_ideal_max_rate']),
 								seed=P['ens_ideal_seed'],radius=P['ens_ideal_radius'],)
 		nengo.Connection(signal,pre,synapse=None)
-		nengo.Connection(pre,ideal,synapse=P['tau'])
+		nengo.Connection(pre,ideal,synapse=P['tau'],transform=P['conn_transform'])
 		probe_signal = nengo.Probe(signal)
 		probe_pre = nengo.Probe(pre.neurons,'spikes')
 		probe_ideal = nengo.Probe(ideal.neurons,'spikes')
@@ -154,7 +154,8 @@ def add_search_space(P,bio_idx):
 	P['bio_idx']=bio_idx
 	P['weights']={}
 	P['locations']={}
-	# P['bias']=hyperopt.hp.uniform('b',P['bias_min'],P['bias_max'])
+	if P['optimize_bias']==True:
+		P['bias']=hyperopt.hp.uniform('b',P['bias_min'],P['bias_max'])
 	for n in range(P['ens_pre_neurons']):
 		for i in range(P['n_syn']): 
 			P['locations']['%s_%s'%(n,i)] =\
@@ -410,14 +411,17 @@ def simulate(P):
 	lifdata=np.load(P['inputs']+'lifdata.npz')
 	signal_in=lifdata['signal_in']
 	spikes_ideal=lifdata['spikes_ideal'][:,P['bio_idx']]
-	if P['spikes_train']=='bio' and P['ens_pre_type']=='BahlNeuron()' and P['ens_pre_label']!=P['ens_label']:
+	if P['spikes_train']=='bio' and P['ens_pre_type']=='BahlNeuron()':# and P['ens_pre_label']!=P['ens_label']:
 		biodata=np.load(P['directory']+P['ens_pre_label']+'/pre/biodata.npz') #todo: hardcoded path
 		spikes_in=biodata['bio_spikes'].T
 	else:
 		spikes_in=lifdata['spikes_in']
-	bias=P['biases'][P['bio_idx']]
 	weights=np.zeros((P['ens_pre_neurons'],P['n_syn']))
 	locations=np.zeros((P['ens_pre_neurons'],P['n_syn']))
+	if P['optimize_bias']==True:
+		bias=P['bias']
+	else:
+		bias=P['biases'][P['bio_idx']]
 	for n in range(P['ens_pre_neurons']):
 		for i in range(P['n_syn']):
 			weights[n][i]=P['weights']['%s_%s'%(n,i)]
@@ -453,10 +457,12 @@ def optimize_bioneuron(P):
 	raw_signal=make_signal(P,'train')
 	os.makedirs(P['inputs'])
 	os.chdir(P['inputs'])
+	print 'Optimizing connection from %s to %s' %(P['ens_pre_label'],P['ens_label'])
 	if P['ens_pre_label'] != P['ens_label']:
 		make_spikes_in(P,raw_signal) #feedforward connection
 	else:
 		make_spikes_in_recurrent(P,raw_signal) #feedforward connection
+		# make_spikes_in(P,raw_signal) #feedforward connection
 	P_list=[]
 	pool = Pool(nodes=P['n_processes'])
 	for bio_idx in range(P['n_bio']):

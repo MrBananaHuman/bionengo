@@ -10,9 +10,10 @@ class BahlNeuron(nengo.neurons.NeuronType):
 	'''compartmental neuron from Bahl et al 2012'''
 
 	probeable=('spikes','voltage')
-	def __init__(self,P):
+	def __init__(self,P,father_op_inputs=None):
 		super(BahlNeuron,self).__init__()
 		self.P=P
+		self.father_op_inputs=father_op_inputs #for recreating during decoder calculation
 
 	def create(self,bio_idx,bias):
 		return self.Bahl(bio_idx,bias)
@@ -124,6 +125,9 @@ class SimBahlNeuron(Operator):
 				info=json.load(data_file)
 			weights=np.array(info['weights'])
 			locations=np.array(info['locations'])
+			if self.P['optimize_bias']==True and len(self.inputs)==1:
+				#only optimize the bias for the first connection
+				bioneuron.bias=info['bias']
 			for n in range(weights.shape[0]):
 				for s in range(weights.shape[1]):
 					section=bioneuron.cell.apical(locations[n][s])
@@ -228,8 +232,16 @@ def build_connection(model,conn):
 		P=copy.copy(conn.post.neuron_type.P)
 		bahl_op=conn.post.neuron_type.father_op
 
+		#if you're recreating bioneurons in decoder calculation, grab the bahl_op.inputs info
+		if conn.post.neuron_type.father_op_inputs != None:
+			# print 'loading optimized weights for %s' %conn.pre.label
+			directory=conn.post.neuron_type.father_op_inputs[conn.pre.label]['directory']
+			filenames_dir=directory+'filenames.txt'
+			with open(filenames_dir,'r') as df:
+				bahl_op.inputs[conn.pre.label]={'directory':directory,'filenames':json.load(df)}
+
 		#if there's no saved information about this input connection, do an optimization
-		if conn.pre.label not in bahl_op.inputs:
+		elif conn.pre.label not in bahl_op.inputs:
 			from optimize_bioneuron import optimize_bioneuron
 			P['ens_pre_neurons']=conn.pre.n_neurons
 			P['ens_pre_dim']=conn.pre.dimensions
@@ -246,6 +258,11 @@ def build_connection(model,conn):
 			P['ens_ideal_min_rate']=conn.post.max_rates.low
 			P['ens_ideal_max_rate']=conn.post.max_rates.high
 			P['ens_ideal_radius']=conn.post.radius
+			P['conn_transform']==conn.transform
+			# if conn.pre.label == 'pre':
+			# 	P['conn_transform']=P['my_transform']#conn.transform
+			# elif conn.pre.label == 'pre2':
+			# 	P['conn_transform']=P['my_transform2']
 			P['biases']=[bahl_op.neurons.neurons[n].bias for n in range(len(bahl_op.neurons.neurons))]
 			directory=optimize_bioneuron(P)
 			filenames_dir=directory+'filenames.txt'
