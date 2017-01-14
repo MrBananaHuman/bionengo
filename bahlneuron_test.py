@@ -42,21 +42,21 @@ def main():
 		# 						seed=P['ens_ideal_seed'],label='pre2',
 		# 						max_rates=nengo.dists.Uniform(P['min_ideal_rate'],
 		# 														P['max_ideal_rate']))
-		# ens_bio=nengo.Ensemble(n_neurons=P['n_bio'],dimensions=P['dim'],
-		# 						neuron_type=BahlNeuron(P),label='ens_bio',
-		# 						seed=P['ens_ideal_seed'],radius=P['radius_ideal'],
-		# 						max_rates=nengo.dists.Uniform(P['min_ideal_rate'],
-		# 														P['max_ideal_rate']))
+		ens_bio=nengo.Ensemble(n_neurons=P['n_bio'],dimensions=P['dim'],
+								neuron_type=BahlNeuron(P),label='ens_bio',
+								seed=P['ens_ideal_seed'],radius=P['radius_ideal'],
+								max_rates=nengo.dists.Uniform(P['min_ideal_rate'],
+																P['max_ideal_rate']))
 		ens_lif=nengo.Ensemble(n_neurons=P['n_bio'],dimensions=P['dim'],
 								neuron_type=nengo.LIF(),seed=P['ens_ideal_seed'],
 								radius=P['radius_ideal'],label='ens_lif',
 								max_rates=nengo.dists.Uniform(P['min_ideal_rate'],
 																P['max_ideal_rate']))
-		# ens_bio2=nengo.Ensemble(n_neurons=P['n_bio'],dimensions=P['dim'],
-		# 						neuron_type=BahlNeuron(P),label='ens_bio2',										
-		# 						seed=P['ens_ideal2_seed'],radius=P['radius_ideal'],
-		# 						max_rates=nengo.dists.Uniform(P['min_ideal_rate'],
-		# 														P['max_ideal_rate']))
+		ens_bio2=nengo.Ensemble(n_neurons=P['n_bio'],dimensions=P['dim'],
+								neuron_type=BahlNeuron(P),label='ens_bio2',										
+								seed=P['ens_ideal2_seed'],radius=P['radius_ideal'],
+								max_rates=nengo.dists.Uniform(P['min_ideal_rate'],
+																P['max_ideal_rate']))
 		ens_lif2=nengo.Ensemble(n_neurons=P['n_bio'],dimensions=P['dim'],
 								neuron_type=nengo.LIF(),seed=P['ens_ideal2_seed'],
 								radius=P['radius_ideal'],label='ens_lif2',
@@ -64,7 +64,7 @@ def main():
 																P['max_ideal_rate']))		
 
 		'''connections'''																
-		# node_bio_out=nengo.Node(None,size_in=P['dim'])
+		node_bio_out=nengo.Node(None,size_in=P['dim'])
 		node_lif_out=nengo.Node(None,size_in=P['dim'])
 
 		nengo.Connection(stim,ens_in,synapse=None)
@@ -72,41 +72,45 @@ def main():
 
 		P['my_transform']=1.0*P['tau']
 		P['my_transform2']=1.0#*P['tau']
-		# nengo.Connection(ens_in,ens_bio,synapse=None,transform=P['my_transform'])
+		nengo.Connection(ens_in,ens_bio,synapse=None,transform=P['my_transform'])
 		nengo.Connection(ens_in,ens_lif,synapse=P['tau'],transform=P['my_transform'])
+
 		# nengo.Connection(ens_in2,ens_bio,synapse=None,transform=P['my_transform2'])
 		# nengo.Connection(ens_in2,ens_lif,synapse=P['tau'],transform=P['my_transform2'])
 
-		# solver_ens_bio=CustomSolver(P,ens_in,ens_bio,model,recurrent=True)
+		solver_ens_bio=CustomSolver(P,ens_in,ens_bio,model,recurrent=True)
 		solver_ens_lif=CustomSolver(P,ens_in,ens_lif,model,recurrent=True)
 		identity_solver=IdentitySolver(P)
 
-		# nengo.Connection(ens_bio,ens_bio,solver=solver_ens_bio) #,synapse=P['tau']
-		nengo.Connection(ens_lif,ens_lif,synapse=P['tau'])
+		nengo.Connection(ens_bio,ens_bio,solver=solver_ens_bio) #,synapse=P['tau']
+		nengo.Connection(ens_lif,ens_lif,synapse=P['tau'],solver=solver_ens_lif)
+
 		# nengo.Connection(ens_bio,node_bio_out,solver=solver_ens_bio) #,synapse=P['tau']
 		# nengo.Connection(ens_lif,node_lif_out,synapse=P['tau'])
 
-		# nengo.Connection(ens_bio,ens_bio2,synapse=None,solver=solver_ens_bio)
+		nengo.Connection(ens_bio,ens_bio2,synapse=None,solver=identity_solver)
 		nengo.Connection(ens_lif,ens_lif2,synapse=P['tau'],solver=solver_ens_lif)
-		# solver_ens_bio2=CustomSolver(P,ens_bio,ens_bio2,model)
+
+		solver_ens_bio2=CustomSolver(P,ens_bio,ens_bio2,model)
 		solver_ens_lif2=CustomSolver(P,ens_lif,ens_lif2,model)
-		# nengo.Connection(ens_bio2,node_bio_out,solver=solver_ens_bio2,synapse=None)
-		nengo.Connection(ens_lif2,node_lif_out,synapse=P['tau'],solver=solver_ens_lif2)
+
+		nengo.Connection(ens_bio2,node_bio_out,solver=solver_ens_bio2,synapse=None)
+		nengo.Connection(ens_lif2,node_lif_out,synapse=P['tau'],solver=solver_ens_bio2)
 
 		probe_stim=nengo.Probe(stim,synapse=None)
 		# probe_stim2=nengo.Probe(stim2,synapse=None)
 		probe_in=nengo.Probe(ens_in,synapse=P['tau'])
 		# probe_in2=nengo.Probe(ens_in2,synapse=P['tau'])
 		probe_in_spikes=nengo.Probe(ens_in.neurons,'spikes')
-		# probe_bio_spikes=nengo.Probe(ens_bio.neurons,'spikes')
-		# probe_bio_spikes2=nengo.Probe(ens_bio2.neurons,'spikes')
+		probe_bio_spikes=nengo.Probe(ens_bio.neurons,'spikes')
+		probe_bio_spikes2=nengo.Probe(ens_bio2.neurons,'spikes')
 		probe_lif_spikes=nengo.Probe(ens_lif.neurons,'spikes')
 		probe_lif_spikes2=nengo.Probe(ens_lif2.neurons,'spikes')
-		# probe_bio=nengo.Probe(ens_bio,synapse=P['tau'],solver=solver_ens_bio)
-		# probe_bio2=nengo.Probe(ens_bio2,synapse=P['tau'],solver=solver_ens_bio2)
-		probe_lif=nengo.Probe(ens_lif,synapse=P['tau'],solver=solver_ens_lif)
-		probe_lif2=nengo.Probe(ens_lif2,synapse=P['tau'],solver=solver_ens_lif2)
-		# probe_bio_out=nengo.Probe(node_bio_out,synapse=P['tau'])
+		probe_bio=nengo.Probe(ens_bio,synapse=P['tau'],solver=solver_ens_bio)
+		probe_bio2=nengo.Probe(ens_bio2,synapse=P['tau'],solver=solver_ens_bio2)
+		probe_lif=nengo.Probe(ens_lif,synapse=P['tau'],solver=solver_ens_bio) #probe lif
+		probe_lif2=nengo.Probe(ens_lif2,synapse=P['tau'],solver=solver_ens_bio2)
+		probe_bio_out=nengo.Probe(node_bio_out,synapse=P['tau'])
 		probe_lif_out=nengo.Probe(node_lif_out,synapse=P['tau'])
 
 	with nengo.Simulator(model,dt=P['dt_nengo']) as sim:
@@ -128,16 +132,16 @@ def main():
 	ax2.plot(sim.trange(),sim.data[probe_stim])
 	# ax2.plot(sim.trange(),sim.data[probe_stim2])
 	ax2.set(ylabel='$x(t)$')
-	# ax3.plot(sim.trange(),sim.data[probe_bio])
-	# ax3.set(ylabel='ens_bio $\hat{x}(t)$')
+	ax3.plot(sim.trange(),sim.data[probe_bio])
+	ax3.set(ylabel='ens_bio $\hat{x}(t)$')
 	ax4.plot(sim.trange(),sim.data[probe_lif])
 	ax4.set(ylabel='LIF $\hat{x}(t)$')
-	# ax5.plot(sim.trange(),sim.data[probe_bio2])
-	# ax5.set(ylabel='ens_bio2 $\hat{x}(t)$')
+	ax5.plot(sim.trange(),sim.data[probe_bio2])
+	ax5.set(ylabel='ens_bio2 $\hat{x}(t)$')
 	ax6.plot(sim.trange(),sim.data[probe_lif2])
 	ax6.set(ylabel='LIF2 $\hat{x}(t)$')
-	# ax7.plot(sim.trange(),sim.data[probe_bio_out])
-	# ax7.set(ylabel='node_bio_out \n$\hat{x}(t)$')
+	ax7.plot(sim.trange(),sim.data[probe_bio_out])
+	ax7.set(ylabel='node_bio_out \n$\hat{x}(t)$')
 		# title='RMSE=%.3f'%np.sqrt(np.average((sim.data[probe_in]-sim.data[probe_bio_out])**2)))
 	ax8.plot(sim.trange(),sim.data[probe_lif_out])
 	ax8.set(ylabel='node_lif_out \n$\hat{x}(t)$')

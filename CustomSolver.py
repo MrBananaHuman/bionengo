@@ -67,29 +67,23 @@ class CustomSolver(nengo.solvers.Solver):
 
 
 			with nengo.Network() as decoder_model:
+				if isinstance(self.ens_post.neuron_type, BahlNeuron):
+					neuron_type=BahlNeuron(self.P,
+						father_op_inputs=self.ens_post.neuron_type.father_op.inputs)
+				else:
+					neuron_type=self.ens_post.neuron_type
 				bio=nengo.Ensemble(
 						n_neurons=self.ens_post.n_neurons,
-						# neuron_type=BahlNeuron(self.P,
-						# 	father_op_inputs=self.ens_post.neuron_type.father_op.inputs),
+						neuron_type=neuron_type,
 						dimensions=self.ens_post.dimensions,
 						max_rates=self.ens_post.max_rates,
 						seed=self.ens_post.seed,
-						radius=self.ens_post.radius)
-				# bio=self.ens_post #need to copy or remake here to avoid test errors?
+						radius=self.ens_post.radius,
+						label='ens_bio')
 				p_bio_neurons=nengo.Probe(bio.neurons,'spikes')
 				for n in range(len(self.input_conn)):
 					signals.append(make_signal(self.P,'train'))
 					stims.append(nengo.Node(lambda t: signals[-1][:,int(t/self.P['dt_nengo'])]))
-					# if isinstance(self.input_conn[n].pre_obj.neuron_type, BahlNeuron):
-					# 	pres.append(nengo.Ensemble(
-					# 			n_neurons=self.ens_post.n_neurons,
-					# 			neuron_type=BahlNeuron(self.P,
-					# 				father_op_inputs=self.input_conn[n].pre_obj.neuron_type.father_op.inputs),
-					# 			dimensions=self.ens_post.dimensions,
-					# 			max_rates=self.ens_post.max_rates,
-					# 			seed=self.ens_post.seed,
-					# 			radius=self.ens_post.radius))	
-					# else:
 					pres.append(nengo.Ensemble(
 						n_neurons=self.input_conn[n].pre_obj.n_neurons,
 						dimensions=self.input_conn[n].pre_obj.dimensions,
@@ -109,14 +103,15 @@ class CustomSolver(nengo.solvers.Solver):
 				if self.recurrent:
 					signals.append(make_signal(self.P,'train'))
 					stims.append(nengo.Node(lambda t: signals[-1][:,int(t/self.P['dt_nengo'])]))
+					#use ideal lif neurons to simulate recurrent spikes
 					self_copy = nengo.Ensemble(
 						n_neurons=self.ens_post.n_neurons,
-						# neuron_type=BahlNeuron(self.P,
-						# 	father_op_inputs=self.ens_post.neuron_type.father_op.inputs),
+						# neuron_type=neuron_type,
 						dimensions=self.ens_post.dimensions,
 						max_rates=self.ens_post.max_rates,
 						seed=self.ens_post.seed,
-						radius=self.ens_post.radius)
+						radius=self.ens_post.radius,
+						label=self.ens_post.label)
 					synapses.append(self.P['tau']) #todo: synapse load
 					transforms.append(1.0) #todo: transform load
 					connections_stim.append(nengo.Connection(stims[-1],self_copy,synapse=None))
