@@ -258,7 +258,7 @@ def build_connection(model,conn):
 			P['ens_ideal_min_rate']=conn.post.max_rates.low
 			P['ens_ideal_max_rate']=conn.post.max_rates.high
 			P['ens_ideal_radius']=conn.post.radius
-			P['conn_transform']==conn.transform
+			P['conn_transform']=conn.transform
 			# if conn.pre.label == 'pre':
 			# 	P['conn_transform']=P['my_transform']#conn.transform
 			# elif conn.pre.label == 'pre2':

@@ -118,7 +118,7 @@ def make_spikes_in_recurrent(P,raw_signal):
 								seed=P['ens_ideal_seed'],radius=P['ens_ideal_radius'],)
 		# nengo.Connection(signal,pre,synapse=None)
 		# nengo.Connection(pre,ideal,synapse=P['tau']) #need to multiply by B
-		nengo.Connection(signal,ideal,synapse=None) #need to multiply by B
+		nengo.Connection(signal,ideal,synapse=None,transform=P['conn_transform'])
 		nengo.Connection(ideal,ideal,synapse=P['tau']) #need to multiply by A
 		probe_signal = nengo.Probe(signal)
 		# probe_pre = nengo.Probe(pre.neurons,'spikes')
@@ -458,11 +458,10 @@ def optimize_bioneuron(P):
 	os.makedirs(P['inputs'])
 	os.chdir(P['inputs'])
 	print 'Optimizing connection from %s to %s' %(P['ens_pre_label'],P['ens_label'])
-	if P['ens_pre_label'] != P['ens_label']:
-		make_spikes_in(P,raw_signal) #feedforward connection
+	if P['ens_pre_label'] == P['ens_label'] and P['train_recurrent']==True:
+		make_spikes_in_recurrent(P,raw_signal)
 	else:
-		make_spikes_in_recurrent(P,raw_signal) #feedforward connection
-		# make_spikes_in(P,raw_signal) #feedforward connection
+		make_spikes_in(P,raw_signal)
 	P_list=[]
 	pool = Pool(nodes=P['n_processes'])
 	for bio_idx in range(P['n_bio']):
