@@ -24,42 +24,43 @@ def ch_dir():
 	os.chdir(datadir) 
 	return datadir
 
-def make_signal(P,train_or_test):
+def make_signal(P):
 	""" Returns: array indexed by t when called from a nengo Node"""
 	import signals
 	import numpy as np
-	dt=P['dt_nengo']
-	if train_or_test == 'train':
-		sP=P['signal_train']
-		t_final=P['t_train']+dt #why is this extra step necessary?
-	elif train_or_test == 'test':
-		sP=P['signal_test']
-		t_final=P['t_test']+dt #why is this extra step necessary?
-	if sP['type']=='prime_sinusoids':
-		raw_signal=signals.prime_sinusoids(dt,t_final,P['dim'])
+	import ipdb
+	signal_type=P['type']
+	dt=P['dt']
+	t_final=P['t_final']+dt #why?
+	dim=P['dim']
+	if signal_type =='equalpower':
+		mean=P['mean']
+		std=P['std']
+		max_freq=P['max_freq']
+		seed=P['seed']
+		if seed == None:
+			seed=np.random.randint(99999999)
+	if signal_type=='prime_sinusoids':
+		raw_signal=signals.prime_sinusoids(dt,t_final,dim)
 		return raw_signal
 	raw_signal=[]
-	for d in range(P['dim']):
-		if sP['type']=='constant':
-			raw_signal.append(signals.constant(dt,t_final,sP['value']))
-		elif sP['type']=='white':
+	for d in range(dim):
+		if signal_type=='constant':
+			raw_signal.append(signals.constant(dt,t_final,mean))
+		elif signal_type=='white':
 			raw_signal.append(signals.white(dt,t_final))
-		elif sP['type']=='white_binary':
-			raw_signal.append(signals.white_binary(dt,t_final,sP['mean'],sP['std']))
-		elif sP['type']=='switch':
-			raw_signal.append(signals.switch(dt,t_final,sP['max_freq'],))
-		elif sP['type']=='equalpower':
-			raw_signal.append(signals.equalpower(
-				dt,t_final,sP['max_freq'],sP['mean'],sP['std']))
-		elif sP['type']=='poisson_binary':
-			raw_signal.append(signals.poisson_binary(
-				dt,t_final,sP['mean_freq'],sP['max_freq'],sP['low'],sP['high']))
-		elif sP['type']=='poisson':
-			raw_signal.append(signals.poisson(
-				dt,t_final,sP['mean_freq'],sP['max_freq']))
-		elif sP['type']=='pink_noise':
-			raw_signal.append(signals.pink_noise(
-				dt,t_final,sP['mean'],sP['std']))
+		elif signal_type=='white_binary':
+			raw_signal.append(signals.white_binary(dt,t_final,mean,std))
+		elif signal_type=='switch':
+			raw_signal.append(signals.switch(dt,t_final,max_freq,))
+		elif signal_type=='equalpower':
+			raw_signal.append(signals.equalpower(dt,t_final,max_freq,mean,std,seed=seed))
+		elif signal_type=='poisson_binary':
+			raw_signal.append(signals.poisson_binary(dt,t_final,mean_freq,max_freq,low,high))
+		elif signal_type=='poisson':
+			raw_signal.append(signals.poisson(dt,t_final,mean_freq,max_freq))
+		elif signal_type=='pink_noise':
+			raw_signal.append(signals.pink_noise(dt,t_final,mean,std))
 	assert len(raw_signal) > 0, "signal type not specified"
 	return np.array(raw_signal)
 
@@ -69,7 +70,7 @@ def make_spikes_in(P,raw_signal):
 	import pandas as pd
 	import ipdb
 	with nengo.Network() as opt_model:
-		signal = nengo.Node(lambda t: raw_signal[:,int(t/P['dt_nengo'])]) #all dim, index at t
+		signal = nengo.Node(lambda t: raw_signal[:,np.floor(t/P['dt_nengo'])]) #all dim, index at t
 		pre = nengo.Ensemble(n_neurons=P['ens_pre_neurons'],
 								dimensions=P['ens_pre_dim'],
 								max_rates=nengo.dists.Uniform(P['ens_pre_min_rate'],
@@ -86,7 +87,7 @@ def make_spikes_in(P,raw_signal):
 		probe_pre = nengo.Probe(pre.neurons,'spikes')
 		probe_ideal = nengo.Probe(ideal.neurons,'spikes')
 	with nengo.Simulator(opt_model,dt=P['dt_nengo']) as opt_test:
-		opt_test.run(P['t_train'])
+		opt_test.run(P['optimize']['t_final'])
 		# eval_points, activities = nengo.utils.ensemble.tuning_curves(ideal,opt_test)
 	gains=opt_test.data[ideal].gain
 	biases=opt_test.data[ideal].bias
@@ -105,7 +106,7 @@ def make_spikes_in_recurrent(P,raw_signal):
 	import pandas as pd
 	import ipdb
 	with nengo.Network() as opt_model:
-		signal = nengo.Node(lambda t: raw_signal[:,int(t/P['dt_nengo'])]) #all dim, index at t
+		signal = nengo.Node(lambda t: raw_signal[:,np.floor(t/P['dt_nengo'])]) #all dim, index at t
 		# pre = nengo.Ensemble(n_neurons=P['ens_pre_neurons'],
 		# 						dimensions=P['ens_pre_dim'],
 		# 						max_rates=nengo.dists.Uniform(P['ens_pre_min_rate'],
@@ -124,7 +125,7 @@ def make_spikes_in_recurrent(P,raw_signal):
 		# probe_pre = nengo.Probe(pre.neurons,'spikes')
 		probe_ideal = nengo.Probe(ideal.neurons,'spikes')
 	with nengo.Simulator(opt_model,dt=P['dt_nengo']) as opt_test:
-		opt_test.run(P['t_train'])
+		opt_test.run(P['optimize']['t_final'])
 		# eval_points, activities = nengo.utils.ensemble.tuning_curves(ideal,opt_test)
 	gains=opt_test.data[ideal].gain
 	biases=opt_test.data[ideal].bias
@@ -180,7 +181,7 @@ def get_rates(P,spikes):
 	import numpy as np
 	import ipdb
 	import nengo
-	timesteps=np.arange(0,P['t_train'],P['dt_nengo'])
+	timesteps=np.arange(0,P['optimize']['t_final'],P['dt_nengo'])
 	if spikes.shape[0]==len(timesteps): #if we're given a spike train
 		if spikes.ndim == 2: #sum over all neurons' spikes
 			spike_train=np.sum(spikes,axis=1)
@@ -199,24 +200,24 @@ def get_rates(P,spikes):
 		lpf=nengo.Lowpass(P['kernel']['tau'])
 		rates=lpf.filt(spike_train,dt=P['dt_nengo'])
 	elif P['kernel']['type'] == 'exp':
-		tkern = np.arange(0,P['t_train']/20.0,P['dt_nengo'])
+		tkern = np.arange(0,P['optimize']['t_final']/20.0,P['dt_nengo'])
 		kernel = np.exp(-tkern/P['kernel']['tau'])
 		kernel /= kernel.sum()
 		rates = np.convolve(kernel, spike_train, mode='full')[:len(timesteps)]
 	elif P['kernel']['type'] == 'gauss':
-		tkern = np.arange(-P['t_train']/20.0,P['t_train']/20.0,P['dt_nengo'])
+		tkern = np.arange(-P['optimize']['t_final']/20.0,P['optimize']['t_final']/20.0,P['dt_nengo'])
 		kernel = np.exp(-tkern**2/(2*P['kernel']['sigma']**2))
 		kernel /= kernel.sum()
 		rates = np.convolve(kernel, spike_train, mode='same')
 	elif P['kernel']['type'] == 'alpha':  
-		tkern = np.arange(0,P['t_train']/20.0,P['dt_nengo'])
+		tkern = np.arange(0,P['optimize']['t_final']/20.0,P['dt_nengo'])
 		kernel = (tkern / P['kernel']['tau']) * np.exp(-tkern / P['kernel']['tau'])
 		kernel /= kernel.sum()
 		rates = np.convolve(kernel, spike_train, mode='full')[:len(timesteps)]
 	elif P['kernel']['type'] == 'isi_smooth':
 		f=isi_hold_function(timesteps,spike_times,midpoint=False)
 		interp=f(spike_times)
-		tkern = np.arange(-P['t_train']/20.0,P['t_train']/20.0,P['dt_nengo'])
+		tkern = np.arange(-P['optimize']['t_final']/20.0,P['optimize']['t_final']/20.0,P['dt_nengo'])
 		kernel = np.exp(-tkern**2/(2*P['kernel']['sigma']**2))
 		kernel /= kernel.sum()
 		rates = np.convolve(kernel, interp, mode='full')[:len(timesteps)]
@@ -242,7 +243,7 @@ def compare_bio_ideal_rates(P,filenames):
 	sns.set(context='poster')
 	figure1, (ax0,ax1,ax2,ax3) = plt.subplots(4, 1,sharex=True)
 
-	timesteps=np.arange(0,P['t_train'],P['dt_nengo'])
+	timesteps=np.arange(0,P['optimize']['t_final'],P['dt_nengo'])
 	spikes_in=np.array(biopop[0]['spikes_in'])
 	bio_spikes=np.array([np.array(biopop[b]['bio_spikes']) for b in range(len(biopop))]).T
 	ideal_spikes=np.array([np.array(biopop[b]['ideal_spikes']) for b in range(len(biopop))]).T
@@ -352,7 +353,7 @@ def run_bioneuron(P):
 	import neuron
 	neuron.h.dt = P['dt_neuron']*1000
 	neuron.init()
-	neuron.run(P['t_train']*1000)
+	neuron.run(P['optimize']['t_final']*1000)
 
 def export_bioneuron(P,run_id,bias,weights,locations,signal_in,spikes_in,
 					ideal_spikes,bio_spikes,ideal_rates,bio_rates,loss):
@@ -384,6 +385,8 @@ def run_hyperopt(P):
 	import numpy as np
 	import json
 	import ipdb
+	import matplotlib.pyplot as plt
+	import seaborn
 	trials=hyperopt.Trials()
 	for t in range(P['evals']):
 		best=hyperopt.fmin(simulate,
@@ -396,6 +399,10 @@ def run_hyperopt(P):
 	ids=[t['result']['run_id'] for t in trials]
 	idx=np.argmin(losses)
 	best_run_id=str(ids[idx])
+	figure1,ax1=plt.subplots(1,1)
+	ax1.plot(range(len(trials)),losses)
+	ax1.set(xlabel='trial',ylabel='total loss')
+	figure1.savefig('hyperopt_performance.png')
 	filename=P['inputs']+best_run_id+"_bioneuron_%s.json"%P['bio_idx']
 	return filename
 
@@ -454,7 +461,7 @@ def optimize_bioneuron(P):
 	P['inputs']=P['directory']+P['ens_label']+'/'+P['ens_pre_label']+'/'
 	if os.path.exists(P['inputs']):
 		return P['inputs']
-	raw_signal=make_signal(P,'train')
+	raw_signal=make_signal(P['optimize'])
 	os.makedirs(P['inputs'])
 	os.chdir(P['inputs'])
 	print 'Optimizing connection from %s to %s' %(P['ens_pre_label'],P['ens_label'])

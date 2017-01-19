@@ -59,12 +59,9 @@ class CustomSolver(nengo.solvers.Solver):
 			pres=[]
 			synapses=[]
 			transforms=[]
-			# transforms=[self.P['my_transform'],self.P['my_transform2']]
 			connections_stim=[]
 			connections_bio=[]
 			probes=[]
-
-
 
 			with nengo.Network() as decoder_model:
 				if isinstance(self.ens_post.neuron_type, BahlNeuron):
@@ -79,10 +76,10 @@ class CustomSolver(nengo.solvers.Solver):
 						max_rates=self.ens_post.max_rates,
 						seed=self.ens_post.seed,
 						radius=self.ens_post.radius,
-						label='ens_bio')
+						label=self.ens_post.label)
 				p_bio_neurons=nengo.Probe(bio.neurons,'spikes')
 				for n in range(len(self.input_conn)):
-					signals.append(make_signal(self.P,'train'))
+					signals.append(make_signal(self.P['decode']))
 					stims.append(nengo.Node(lambda t: signals[-1][:,int(t/self.P['dt_nengo'])]))
 					pres.append(nengo.Ensemble(
 						n_neurons=self.input_conn[n].pre_obj.n_neurons,
@@ -94,46 +91,63 @@ class CustomSolver(nengo.solvers.Solver):
 					synapses.append(self.input_conn[n].synapse)
 					transforms.append(self.input_conn[n].transform)
 					connections_stim.append(nengo.Connection(
-						stims[-1],pres[-1],synapse=None))
+						stims[-1],pres[-1],synapse=None)) #signal not filtered before pre
 					connections_bio.append(nengo.Connection(
 						pres[-1],bio,synapse=synapses[-1],
-						transform=transforms[-1])) #already trained to have this transform
+						transform=transforms[-1]))
 					# probes.append(nengo.Probe(stims[-1],synapse=synapses[-1])) #smooth with probes
 					probes.append(nengo.Probe(pres[-1],synapse=synapses[-1])) #smooth with probes
-				if self.recurrent:
-					signals.append(make_signal(self.P,'train'))
-					stims.append(nengo.Node(lambda t: signals[-1][:,int(t/self.P['dt_nengo'])]))
-					#use ideal lif neurons to simulate recurrent spikes
-					self_copy = nengo.Ensemble(
-						n_neurons=self.ens_post.n_neurons,
-						# neuron_type=neuron_type,
-						dimensions=self.ens_post.dimensions,
-						max_rates=self.ens_post.max_rates,
-						seed=self.ens_post.seed,
-						radius=self.ens_post.radius,
-						label=self.ens_post.label)
-					synapses.append(self.P['tau']) #todo: synapse load
-					transforms.append(1.0) #todo: transform load
-					connections_stim.append(nengo.Connection(stims[-1],self_copy,synapse=None))
-					connections_bio.append(nengo.Connection(self_copy,bio,synapse=synapses[-1]))
-					# connections_bio.append(nengo.Connection(bio,self_copy,synapse=self.P['tau']))
-					probes.append(nengo.Probe(self_copy,synapse=synapses[-1]))
+				# if self.recurrent:
+				# 	signals.append(make_signal(self.P['decode']))
+				# 	stims.append(nengo.Node(lambda t: signals[-1][:,int(t/self.P['dt_nengo'])]))
+				# 	#use ideal lif neurons to simulate recurrent spikes
+				# 	ideal = nengo.Ensemble(
+				# 		n_neurons=self.ens_post.n_neurons,
+				# 		# neuron_type=neuron_type,
+				# 		dimensions=self.ens_post.dimensions,
+				# 		max_rates=self.ens_post.max_rates,
+				# 		seed=self.ens_post.seed,
+				# 		radius=self.ens_post.radius,
+				# 		label=self.ens_post.label)
+				# 	synapses.append(self.P['tau']) #todo: synapse load
+				# 	transforms.append(1.0) #todo: transform load
+				# 	connections_stim.append(nengo.Connection(stims[-1],ideal,synapse=None))
+				# 	connections_bio.append(nengo.Connection(ideal,bio,synapse=synapses[-1]))
+				# 	# connections_bio.append(nengo.Connection(bio,ideal,synapse=self.P['tau']))
+				# 	probes.append(nengo.Probe(ideal,synapse=synapses[-1]))
 
 
 
 			with nengo.Simulator(decoder_model, dt=self.P['dt_nengo']) as decoder_sim:
-				decoder_sim.run(self.P['t_train'])
+				decoder_sim.run(self.P['decode']['t_final'])
+
 			lpf=nengo.Lowpass(self.P['tau'])
 			self.activities=lpf.filt(decoder_sim.data[p_bio_neurons],dt=self.P['dt_nengo'])
 			weighted_inputs=[]
 			for n in range(len(self.input_conn)):
-				weighted_inputs.append(transforms[n]*decoder_sim.data[probes[n]])
-			if self.recurrent:
-				weighted_inputs.append(transforms[-1]*decoder_sim.data[probes[-1]])
-			self.upsilon=np.sum(np.array(weighted_inputs),axis=0)
+				if synapses[n]!=None:
+					weighted_inputs.append(transforms[n]*synapses[n].filt(signals[n],dt=self.P['dt_nengo']))
+				else:
+					weighted_inputs.append(transforms[n]*signals[n])
+			# if self.recurrent:
+			# 	weighted_inputs.append(transforms[-1]*decoder_sim.data[probes[-1]])
+			self.upsilon=np.sum(np.array(weighted_inputs),axis=0).T[:len(decoder_sim.trange())]
 			self.decoders,self.info=self.solver(self.activities,self.upsilon)
-			neuron.init()
 
+			import matplotlib.pyplot as plt
+			import seaborn as sns
+			sns.set(context='poster')
+			figureA,axA=plt.subplots(1,1)
+			axA.plot(decoder_sim.trange(),lpf.filt(self.upsilon,dt=self.P['dt_nengo']),label='$x(t)$')
+			axA.plot(decoder_sim.trange(),np.dot(self.activities,self.decoders),label='$\hat{x}(t)$')
+			axA.set(xlabel='time',ylabel='value',title='rmse=%.3f'%self.info['rmses'][0])
+			axA.legend()
+			figureA.savefig('decoder_accuracy.png')
+			# ipdb.set_trace()
+
+			neuron.init()
+			del decoder_model
+			del decoder_sim
 
 		'''
 		preloaded spike approach: load activities and eval_opints from optimize_bioneuron
@@ -146,10 +160,5 @@ class CustomSolver(nengo.solvers.Solver):
 		elif self.P['rate_decode']=='bio':
 			self.activities=self.ens_post.neuron_type.father_op.inputs[self.ens_pre.label]['bio_rates']
 			self.upsilon=self.ens_post.neuron_type.father_op.inputs[self.ens_pre.label]['signal_in']
-			# self.upsilon*=self.P['my_transform']
 			self.decoders,self.info=self.solver(self.activities.T,self.upsilon)
-			# import matplotlib.pyplot as plt
-			# plt.plot(np.dot(self.activities.T,self.decoders))
-			# plt.plot(self.upsilon)
-			# ipdb.set_trace()
 		return self.decoders, dict()

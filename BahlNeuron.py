@@ -108,7 +108,6 @@ class SimBahlNeuron(Operator):
 		for bioneuron in self.neurons.neurons:
 			if not hasattr(bioneuron,'cell'):
 				bioneuron.add_cell()
-				bioneuron.start_recording()
 
 	def init_connection(self,ens_pre_label,ens_pre_neurons,n_syn):
 		for bioneuron in self.neurons.neurons:
@@ -128,12 +127,14 @@ class SimBahlNeuron(Operator):
 			if self.P['optimize_bias']==True and len(self.inputs)==1:
 				#only optimize the bias for the first connection
 				bioneuron.bias=info['bias']
+				# print 'load_weights bias %s' %nrn, bioneuron.bias
 			for n in range(weights.shape[0]):
 				for s in range(weights.shape[1]):
 					section=bioneuron.cell.apical(locations[n][s])
 					weight=weights[n][s]
 					synapse=ExpSyn(section,weight,self.P['tau'])
 					bioneuron.synapses[ens_pre_label][n][s]=synapse
+			bioneuron.start_recording()
 
 	def save_optimization(self,conn_pre_label):
 		indices=[]
@@ -243,6 +244,7 @@ def build_connection(model,conn):
 		#if there's no saved information about this input connection, do an optimization
 		elif conn.pre.label not in bahl_op.inputs:
 			from optimize_bioneuron import optimize_bioneuron
+			# from optimize_recurrent import optimize_recurrent
 			P['ens_pre_neurons']=conn.pre.n_neurons
 			P['ens_pre_dim']=conn.pre.dimensions
 			P['ens_pre_min_rate']=conn.pre.max_rates.low
@@ -259,11 +261,8 @@ def build_connection(model,conn):
 			P['ens_ideal_max_rate']=conn.post.max_rates.high
 			P['ens_ideal_radius']=conn.post.radius
 			P['conn_transform']=conn.transform
-			# if conn.pre.label == 'pre':
-			# 	P['conn_transform']=P['my_transform']#conn.transform
-			# elif conn.pre.label == 'pre2':
-			# 	P['conn_transform']=P['my_transform2']
 			P['biases']=[bahl_op.neurons.neurons[n].bias for n in range(len(bahl_op.neurons.neurons))]
+			# directory=optimize_recurrent(P)
 			directory=optimize_bioneuron(P)
 			filenames_dir=directory+'filenames.txt'
 			with open(filenames_dir,'r') as df:

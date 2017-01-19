@@ -38,7 +38,7 @@ def prime_sinusoids(dt,t_final,dim):
     output=sinusoids(t_final,primes,timesteps)
     return output
 
-def equalpower(dt, t_final, max_freq, mean=0.0, std=1.0, n=None):
+def equalpower(dt, t_final, max_freq, mean=0.0, std=1.0, n=None,seed=None):
     """Generate a random signal with equal power below a maximum frequency
 
     Parameters
@@ -61,7 +61,7 @@ def equalpower(dt, t_final, max_freq, mean=0.0, std=1.0, n=None):
     s : array_like
         Generated signal(s), where each row is a time, and each column a signal
     """
-
+    rng=npr.RandomState(seed=seed)
     vector_out = n is None
     n = 1 if n is None else n
 
@@ -71,7 +71,7 @@ def equalpower(dt, t_final, max_freq, mean=0.0, std=1.0, n=None):
     nf = np.round(max_freq / df)      # number of non-zero frequencies
     assert nf < nt
 
-    theta = 2*np.pi*npr.rand(n, nf)
+    theta = 2*np.pi*rng.rand(n, nf)
     B = np.cos(theta) + 1.0j * np.sin(theta)
 
     A = np.zeros((n,nt), dtype=np.complex)
