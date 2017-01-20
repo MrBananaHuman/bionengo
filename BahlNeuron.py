@@ -15,25 +15,23 @@ class BahlNeuron(nengo.neurons.NeuronType):
 		self.P=P
 		self.father_op_inputs=father_op_inputs #for recreating during decoder calculation
 
-	def create(self,bio_idx,bias):
-		return self.Bahl(bio_idx,bias)
+	def create(self,bio_idx):
+		return self.Bahl(bio_idx)
 
 	class Bahl():
 		import numpy as np
 		import neuron
 		from synapses import ExpSyn, Exp2Syn
 		import os
-		def __init__(self,bio_idx,bias):
+		def __init__(self,bio_idx):
 			# neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc')
 			neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc') #todo: hardcoded path
 			self.bio_idx=bio_idx
-			self.bias = bias
+			self.bias = None
 			self.synapses = {}
 			self.vectimes = {}
 			self.vecstim = {}
 			self.netcons = {}
-			# self.add_cell()
-			# self.start_recording()
 		#creating cells in init() makes optimization run extra neurons;
 		#instead call this in build_connection()
 		def add_cell(self): 
@@ -90,8 +88,7 @@ class SimBahlNeuron(Operator):
 		self.P=self.neurons.P
 		self.neurons.father_op=self
 		self.inputs={} #structured like {ens_in_label: {directory,filenames}}
-		self.neurons.neurons=[self.neurons.create(i,np.random.uniform(self.P['bias_min'],self.P['bias_max']))
-								 for i in range(output.shape[0])]
+		self.neurons.neurons=[self.neurons.create(i)for i in range(output.shape[0])]
 		neuron.h.dt = self.P['dt_neuron']*1000
 		neuron.init()
 
@@ -124,10 +121,8 @@ class SimBahlNeuron(Operator):
 				info=json.load(data_file)
 			weights=np.array(info['weights'])
 			locations=np.array(info['locations'])
-			if self.P['optimize_bias']==True and len(self.inputs)==1:
-				#only optimize the bias for the first connection
-				bioneuron.bias=info['bias']
-				# print 'load_weights bias %s' %nrn, bioneuron.bias
+			bioneuron.bias=info['bias']
+			# print 'load_weights bias %s' %nrn, bioneuron.bias
 			for n in range(weights.shape[0]):
 				for s in range(weights.shape[1]):
 					section=bioneuron.cell.apical(locations[n][s])
@@ -171,6 +166,7 @@ class SimBahlNeuron(Operator):
 		self.inputs[conn_pre_label]['ideal_spikes']=np.array(ideal_spikes)
 		self.inputs[conn_pre_label]['ideal_rates']=np.array(ideal_rates)
 		self.inputs[conn_pre_label]['losses']=np.array(losses)
+		# print 'save optimization biases', self.inputs[conn_pre_label]['biases']
 		np.savez(self.inputs[conn_pre_label]['directory']+'/'+'biodata.npz',
 				indices=self.inputs[conn_pre_label]['indices'],
 				weights=self.inputs[conn_pre_label]['weights'],
@@ -261,7 +257,9 @@ def build_connection(model,conn):
 			P['ens_ideal_max_rate']=conn.post.max_rates.high
 			P['ens_ideal_radius']=conn.post.radius
 			P['conn_transform']=conn.transform
+			#biases either equal None (first optimization) or are set with load_weights after first
 			P['biases']=[bahl_op.neurons.neurons[n].bias for n in range(len(bahl_op.neurons.neurons))]
+			# print 'build connection biases', P['biases']
 			# directory=optimize_recurrent(P)
 			directory=optimize_bioneuron(P)
 			filenames_dir=directory+'filenames.txt'

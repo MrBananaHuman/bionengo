@@ -1,10 +1,10 @@
 {
-	'dt_nengo':0.001,
+	'dt_nengo':0.001, #change in optimize too
 	'dt_neuron':0.0001,
 	'ens_pre_neurons':50,
 	'n_bio':30,
 	'n_syn':5,
-	'dim':1,
+	'dim':1, #change in optimize too
 	'ens_pre_seed':222,
 	'ens_ideal_seed':333,
 	'ens_ideal2_seed':444,
@@ -14,17 +14,30 @@
 	'tau':0.05,
 	'synapse_type':'ExpSyn',
 
-	't_train':10.0,
-	't_test':2.0,
-	'evals':300,
-	'directory':None, 
-	'directory':'/home/pduggins/bionengo/data/UPPZNAW5K/', #1D_integrator
-	'signal_train': 
-		#{'type':'prime_sinusoids'},
-		{'type':'equalpower','max_freq':3.0,'mean':0.0,'std':0.75},
-	'signal_test':
-		#{'type':'prime_sinusoids'},
-		{'type':'equalpower','max_freq':3.0,'mean':0.0,'std':0.75},
+	'transform_pre_to_ens':0.5,
+	'transform_pre2_to_ens':0.25,
+	'transform_pre2_to_ens2':0.25,
+	'transform_ens_to_ens':1.0,
+	'transform_ens_to_ens2':-1.0,
+
+	'evals':100,
+	'directory':None,
+	'directory':'/home/pduggins/bionengo/data/K7COL16OM/',
+
+	'optimize': 
+		{'type':'equalpower','t_final':3.0,'dt':0.001,'dim':1,'mean':0.0,'std':0.75,'max_freq':1.0,'seed':None},
+	'decode': 
+		#{'type':'prime_sinusoids','t_final':2.0,'dt':0.001,'dim':1,},
+		#{'type':'constant','t_final':2.0,'dt':0.001,'dim':1,'mean':0.5},
+		{'type':'equalpower','t_final':3.0,'dt':0.001,'dim':1,'mean':0.0,'std':0.75,'max_freq':1.0,'seed':111},
+	'test':
+		{'type':'prime_sinusoids','t_final':3.0,'dt':0.001,'dim':1,},
+		#{'type':'constant','t_final':3.0,'dt':0.001,'dim':1,'mean':0.5},
+		#{'type':'equalpower','t_final':3.0,'dt':0.001,'dim':1,'mean':0.0,'std':0.75,'max_freq':1.0,'seed':666},
+	'test2':
+		#{'type':'prime_sinusoids','t_final':3.0,'dt':0.001,'dim':1,},
+		#{'type':'constant','t_final':3.0,'dt':0.001,'dim':1,'mean':0.5},
+		{'type':'equalpower','t_final':3.0,'dt':0.001,'dim':1,'mean':0.0,'std':0.75,'max_freq':1.0,'seed':999},
 
 	'kernel': #for smoothing spikes to calculate loss and activities
 		{'type':'lowpass','tau':0.05},
@@ -32,11 +45,13 @@
 		#{'type':'gauss','sigma':0.02,},
 
 	'w_0':0.001,
+	'optimize_bias':True,
+	'train_recurrent':True,
 	'bias_min':-1.0,
 	'bias_max':1.0,
 	'n_seg': 5,
 	'n_processes':10,
 
 	'spikes_train':'ideal', #use spiking output of pre_bio vs. pre_lif to train next ens
-	'rate_decode':'bio', #calculate decoders: preloaded 'bio' vs. 'ideal', 'oracle', 'simulate'
+	'rate_decode':'ideal', #calculate decoders: 'ideal', 'simulate'
 }

@@ -73,13 +73,11 @@ def make_spikes_in(P,raw_signal):
 		signal = nengo.Node(lambda t: raw_signal[:,np.floor(t/P['dt_nengo'])]) #all dim, index at t
 		pre = nengo.Ensemble(n_neurons=P['ens_pre_neurons'],
 								dimensions=P['ens_pre_dim'],
-								max_rates=nengo.dists.Uniform(P['ens_pre_min_rate'],
-																P['ens_pre_max_rate']),
+								max_rates=nengo.dists.Uniform(P['ens_pre_min_rate'],P['ens_pre_max_rate']),
 								seed=P['ens_pre_seed'],radius=P['ens_pre_radius'],)
 		ideal = nengo.Ensemble(n_neurons=P['ens_ideal_neurons'],
 								dimensions=P['ens_ideal_dim'],
-								max_rates=nengo.dists.Uniform(P['ens_ideal_min_rate'],
-																P['ens_ideal_max_rate']),
+								max_rates=nengo.dists.Uniform(P['ens_ideal_min_rate'],P['ens_ideal_max_rate']),
 								seed=P['ens_ideal_seed'],radius=P['ens_ideal_radius'],)
 		nengo.Connection(signal,pre,synapse=None)
 		nengo.Connection(pre,ideal,synapse=P['tau'],transform=P['conn_transform'])
@@ -88,17 +86,11 @@ def make_spikes_in(P,raw_signal):
 		probe_ideal = nengo.Probe(ideal.neurons,'spikes')
 	with nengo.Simulator(opt_model,dt=P['dt_nengo']) as opt_test:
 		opt_test.run(P['optimize']['t_final'])
-		# eval_points, activities = nengo.utils.ensemble.tuning_curves(ideal,opt_test)
-	gains=opt_test.data[ideal].gain
-	biases=opt_test.data[ideal].bias
-	encoders=opt_test.data[ideal].encoders
 	signal_in=opt_test.data[probe_signal]
 	spikes_in=opt_test.data[probe_pre]
 	spikes_ideal=opt_test.data[probe_ideal]
 	np.savez(P['inputs']+'lifdata.npz',
-			signal_in=signal_in,spikes_in=spikes_in,spikes_ideal=spikes_ideal,
-			gains=gains, biases=biases, encoders=encoders)
-			# ideal_eval_points=eval_points,ideal_activities=activities)
+			signal_in=signal_in,spikes_in=spikes_in,spikes_ideal=spikes_ideal)
 
 def make_spikes_in_recurrent(P,raw_signal):
 	import nengo
@@ -126,16 +118,10 @@ def make_spikes_in_recurrent(P,raw_signal):
 		probe_ideal = nengo.Probe(ideal.neurons,'spikes')
 	with nengo.Simulator(opt_model,dt=P['dt_nengo']) as opt_test:
 		opt_test.run(P['optimize']['t_final'])
-		# eval_points, activities = nengo.utils.ensemble.tuning_curves(ideal,opt_test)
-	gains=opt_test.data[ideal].gain
-	biases=opt_test.data[ideal].bias
-	encoders=opt_test.data[ideal].encoders
 	signal_in=opt_test.data[probe_signal]
 	spikes_ideal=opt_test.data[probe_ideal]
 	np.savez(P['inputs']+'lifdata.npz',
-			signal_in=signal_in,spikes_in=spikes_ideal,spikes_ideal=spikes_ideal,
-			gains=gains, biases=biases, encoders=encoders)
-			# ideal_eval_points=eval_points,ideal_activities=activities)
+			signal_in=signal_in,spikes_in=spikes_ideal,spikes_ideal=spikes_ideal)
 
 def weight_rescale(location):
 	#interpolation
@@ -149,14 +135,15 @@ def weight_rescale(location):
 	return scaled_weight
 
 def add_search_space(P,bio_idx):
-	#adds a hyperopt-distributed weight, location, NOT bias for each synapse
+	#adds a hyperopt-distributed weight, location, bias for each synapse
 	import numpy as np
 	import hyperopt
 	P['bio_idx']=bio_idx
 	P['weights']={}
 	P['locations']={}
-	if P['optimize_bias']==True:
-		P['bias']=hyperopt.hp.uniform('b',P['bias_min'],P['bias_max'])
+	if P['biases'][bio_idx]==None:
+		#for first optimization draw from hyperopt distribution
+		P['biases'][bio_idx]=hyperopt.hp.uniform('b_%s'%bio_idx,P['bias_min'],P['bias_max'])
 	for n in range(P['ens_pre_neurons']):
 		for i in range(P['n_syn']): 
 			P['locations']['%s_%s'%(n,i)] =\
@@ -425,10 +412,8 @@ def simulate(P):
 		spikes_in=lifdata['spikes_in']
 	weights=np.zeros((P['ens_pre_neurons'],P['n_syn']))
 	locations=np.zeros((P['ens_pre_neurons'],P['n_syn']))
-	if P['optimize_bias']==True:
-		bias=P['bias']
-	else:
-		bias=P['biases'][P['bio_idx']]
+	bias=P['biases'][P['bio_idx']]
+	# print 'optimization bias', bias
 	for n in range(P['ens_pre_neurons']):
 		for i in range(P['n_syn']):
 			weights[n][i]=P['weights']['%s_%s'%(n,i)]
