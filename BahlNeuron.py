@@ -29,8 +29,8 @@ class BahlNeuron(nengo.neurons.NeuronType):
 			self.bio_idx=bio_idx
 			self.bias = None
 			self.synapses = {}
-			self.vectimes = {}
-			self.vecstim = {}
+			# self.vectimes = {}
+			# self.vecstim = {}
 			self.netcons = {}
 		#creating cells in init() makes optimization run extra neurons;
 		#instead call this in build_connection()
@@ -48,6 +48,7 @@ class BahlNeuron(nengo.neurons.NeuronType):
 			self.t_record.record(neuron.h._ref_t)
 			self.spikes = neuron.h.Vector()
 			self.ap_counter.record(neuron.h.ref(self.spikes))
+			self.spikes_last=[]
 
 	def rates(self, x, gain, bias): #todo: remove this without errors
 		return x #CustomSolver class calculates A from Y
@@ -62,11 +63,15 @@ class BahlNeuron(nengo.neurons.NeuronType):
 		new_spiked=[]
 		new_voltage=[]
 		for nrn in neurons:
-			spike_times=np.round(np.array(nrn.spikes),decimals=1)
-			count=np.sum(spike_times>(time-dt)*1000)
+			spike_times=np.array(nrn.spikes)
+			spike_times_last=np.array(nrn.spikes_last)
+			# if len(spike_times)>1: ipdb.set_trace()
+			count=len(spike_times)-len(spike_times_last)
+			# count=np.sum(spike_times>(time-dt)*1000)
 			new_spiked.append(count)
 			volt=np.array(nrn.v_record)[-1] #fails if neuron.init() not called at right times
 			new_voltage.append(volt)
+			nrn.spikes_last=spike_times
 		spiked[:]=np.array(new_spiked)/dt
 		voltage[:]=np.array(new_voltage)
 
@@ -109,8 +114,8 @@ class SimBahlNeuron(Operator):
 	def init_connection(self,ens_pre_label,ens_pre_neurons,n_syn):
 		for bioneuron in self.neurons.neurons:
 			bioneuron.synapses[ens_pre_label]=np.empty((ens_pre_neurons,n_syn),dtype=object)
-			bioneuron.vectimes[ens_pre_label]=np.empty((ens_pre_neurons),dtype=object)
-			bioneuron.vecstim[ens_pre_label]=np.empty((ens_pre_neurons),dtype=object)
+			# bioneuron.vectimes[ens_pre_label]=np.empty((ens_pre_neurons),dtype=object)
+			# bioneuron.vecstim[ens_pre_label]=np.empty((ens_pre_neurons),dtype=object)
 			bioneuron.netcons[ens_pre_label]=np.empty((ens_pre_neurons,n_syn),dtype=object)
 
 	def load_weights(self,ens_pre_label):
@@ -272,8 +277,7 @@ def build_connection(model,conn):
 		bahl_op.init_connection(conn.pre.label,conn.pre.n_neurons,P['n_syn'])
 		bahl_op.load_weights(conn.pre.label) 
 		bahl_op.save_optimization(conn.pre.label)
-		model.add_op(TransmitSpikes(conn.pre.label,model.sig[conn]['in'],
-									bahl_op,states=[model.time]))
+		model.add_op(TransmitSpikes(conn.pre.label,model.sig[conn]['in'],bahl_op,states=[model.time]))
 
 	else: #normal connection
 		return nengo.builder.connection.build_connection(model, conn)

@@ -177,11 +177,14 @@ def get_rates(P,spikes):
 	elif len(spikes) > 0: #if we're given spike times and there's at least one spike
 		spike_train=np.zeros_like(timesteps)
 		spike_times=spikes.ravel()
-		for idx in spike_times/P['dt_nengo']/1000:
+		st=spike_times/P['dt_nengo']/1000
+		st_int=np.round(st,decimals=1).astype(int)
+		for idx in st_int:
 			if idx >= len(spike_train): break
-			spike_train[int(idx)]=1.0/P['dt_nengo']
+			spike_train[idx]=1.0/P['dt_nengo']
 	else:
 		return np.zeros_like(timesteps), np.zeros_like(timesteps)
+
 	rates=np.zeros_like(spike_train)
 	if P['kernel']['type'] == 'lowpass':
 		lpf=nengo.Lowpass(P['kernel']['tau'])
@@ -228,7 +231,7 @@ def compare_bio_ideal_rates(P,filenames):
 			bioneuron=json.load(data_file)
 		biopop.append(bioneuron)
 	sns.set(context='poster')
-	figure1, (ax0,ax1,ax2,ax3) = plt.subplots(4, 1,sharex=True)
+	figure1, (ax0,ax1,ax2) = plt.subplots(3, 1,sharex=True)
 
 	timesteps=np.arange(0,P['optimize']['t_final'],P['dt_nengo'])
 	spikes_in=np.array(biopop[0]['spikes_in'])
@@ -237,22 +240,45 @@ def compare_bio_ideal_rates(P,filenames):
 	bio_rates=np.array([np.array(biopop[b]['bio_rates']) for b in range(len(biopop))])
 	ideal_rates=([np.array(biopop[b]['ideal_rates']) for b in range(len(biopop))])
 	loss=np.sqrt(np.average((bio_rates-ideal_rates)**2))
-
 	rasterplot(timesteps,spikes_in,ax=ax0,use_eventplot=True)
 	rasterplot(timesteps,ideal_spikes,ax=ax1,use_eventplot=True)
 	rasterplot(timesteps,bio_spikes,ax=ax2,use_eventplot=True)
-	ax0.set(ylabel='input spikes',title='loss=%s'%loss)
+	ax0.set(ylabel='input spikes',title='total rmse (rate)=%.5f'%loss)
 	ax1.set(ylabel='ideal spikes')
 	ax2.set(ylabel='bio spikes')
-	for b in range(len(biopop)):
-		bio_rates=ax3.plot(timesteps,np.array(biopop[b]['bio_rates']),linestyle='-')
-		ideal_rates=ax3.plot(timesteps,np.array(biopop[b]['ideal_rates']),linestyle='--',
-			color=bio_rates[0].get_color())
-	ax3.plot(0,0,color='k',linestyle='-',label='bioneuron')
-	ax3.plot(0,0,color='k',linestyle='--',label='LIF')
-	ax3.set(xlabel='time (s)',ylabel='firing rate (Hz)',xlim=(0,1.0))
-	plt.legend(loc='center right', prop={'size':6}, bbox_to_anchor=(1.1,0.8))
-	figure1.savefig('a(t)_bio_vs_ideal.png')
+	figure1.savefig('spikes_bio_vs_ideal.png')
+	plt.close()
+
+	plots_per_subfig=1
+	n_subfigs=int(np.ceil(len(biopop)/plots_per_subfig))
+	n_columns = 1
+	n_rows=n_subfigs // n_columns
+	n_rows+=n_subfigs % n_columns
+	position = range(1,n_subfigs + 1)
+	# figure2, axarr= plt.subplots(n_rows,n_columns)
+	k=0
+	for row in range(n_rows):
+		for column in range(n_columns):
+			figure,ax=plt.subplots(1,1)
+			# ax=axarr[row,column]
+			bio_rates=[]
+			ideal_rates=[]
+			for b in range(plots_per_subfig):
+				if k>=len(biopop): break
+				bio_rates_plot=ax.plot(timesteps,np.array(biopop[k]['bio_rates']),linestyle='-')
+				ideal_rates_plot=ax.plot(timesteps,np.array(biopop[k]['ideal_rates']),linestyle='--',
+					color=bio_rates_plot[0].get_color())
+				ax.plot(0,0,color='k',linestyle='-',label='bioneuron')
+				ax.plot(0,0,color='k',linestyle='--',label='LIF')
+				bio_rates.append(np.array(biopop[k]['bio_rates']))
+				ideal_rates.append(np.array(biopop[k]['ideal_rates']))
+				k+=1
+			rmse=np.sqrt(np.average((np.array(bio_rates)-np.array(ideal_rates))**2))
+			ax.set(xlabel='time (s)',ylabel='firing rate (Hz)',title='rmse=%.5f'%rmse)
+			figure.savefig('a(t)_bio_vs_ideal_neurons_%s-%s'%(k-plots_per_subfig,k))
+			plt.close(figure)
+	# plt.tight_layout()
+	# figure2.savefig('a(t)_bio_vs_ideal.png')
 
 
 '''
@@ -280,8 +306,6 @@ class Bahl():
 		self.vecstim = {P['ens_pre_label']:np.empty((P['ens_pre_neurons']),dtype=object)}
 		self.netcons = {P['ens_pre_label']:np.empty((P['ens_pre_neurons'],P['n_syn']),dtype=object)}
 		# self.synapses = {P['ens_pre_label']:{}}
-		# self.vectimes = {P['ens_pre_label']:{}}
-		# self.vecstim = {P['ens_pre_label']:{}}
 		# self.netcons = {P['ens_pre_label']:{}}
 		for n in range(P['ens_pre_neurons']):
 			for s in range(P['n_syn']):
@@ -423,7 +447,7 @@ def simulate(P):
 	bioneuron.connect_vecstim(P,spikes_in)
 	run_bioneuron(P)
 	
-	bio_spikes, bio_rates=get_rates(P,np.round(np.array(bioneuron.spikes),decimals=3))
+	bio_spikes, bio_rates=get_rates(P,np.array(bioneuron.spikes))
 	ideal_spikes, ideal_rates=get_rates(P,spikes_ideal)
 	loss = rate_loss(bio_rates,ideal_rates)
 	export_bioneuron(P,run_id,bias,weights,locations,signal_in,spikes_in,

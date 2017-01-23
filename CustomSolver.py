@@ -62,14 +62,16 @@ class CustomSolver(nengo.solvers.Solver):
 		connections_ens=[]
 		probes=[]
 
-		if self.P['rate_decode']=='bio':
+		if self.P['decoder_train']=='load_bio' and self.method != 'ideal':
 			self.activities=self.ens_post.neuron_type.father_op.inputs[self.ens_pre.label]['bio_rates']
-			self.upsilon=self.ens_post.neuron_type.father_op.inputs[self.ens_pre.label]['signal_in']
+			self.upsilon=nengo.Lowpass(self.P['tau']).filt(
+				self.ens_post.neuron_type.father_op.inputs[self.ens_pre.label]['signal_in'],
+				dt=self.P['dt_nengo'])
 			self.decoders,self.info=self.solver(self.activities.T,self.upsilon)
 			return self.decoders, dict()
 
 		with nengo.Network() as decoder_model:
-			if self.method == 'simulate':
+			if self.method == 'bio':
 				neuron_type=BahlNeuron(self.P,father_op_inputs=self.ens_post.neuron_type.father_op.inputs)
 			elif self.method == 'ideal':
 				neuron_type=nengo.LIF()
@@ -84,7 +86,7 @@ class CustomSolver(nengo.solvers.Solver):
 			p_ens_neurons=nengo.Probe(ens.neurons,'spikes')
 			for n in range(len(self.input_conn)):
 				signals.append(make_signal(self.P['decode']))
-				stims.append(nengo.Node(lambda t: signals[-1][:,int(t/self.P['dt_nengo'])]))
+				stims.append(nengo.Node(lambda t: signals[-1][:,np.floor(t/self.P['dt_nengo'])]))
 				pres.append(nengo.Ensemble(
 					n_neurons=self.input_conn[n].pre_obj.n_neurons,
 					dimensions=self.input_conn[n].pre_obj.dimensions,
@@ -107,38 +109,62 @@ class CustomSolver(nengo.solvers.Solver):
 			decoder_sim.run(self.P['decode']['t_final'])
 
 		lpf=nengo.Lowpass(self.P['tau'])
-		self.activities=lpf.filt(decoder_sim.data[p_ens_neurons],dt=self.P['dt_nengo'])
+		self.activities_nengo=lpf.filt(decoder_sim.data[p_ens_neurons],dt=self.P['dt_nengo'])
+		# if self.method == 'bio': #bypass spike probe problem
+		# 	from optimize_bioneuron import get_rates
+		# 	import copy
+		# 	bio_spikes_NEURON=np.array([np.array(nrn.spikes) for nrn in ens.neuron_type.neurons])
+		# 	P2=copy.copy(self.P)
+		# 	P2['optimize']['t_final']=self.P['decode']['t_final']
+		# 	bio_rates_NEURON=np.array([get_rates(P2,spike_times)[1] for spike_times in bio_spikes_NEURON]).T
+		# 	self.activities_bio=bio_rates_NEURON
+
 		weighted_inputs=[]
 		for n in range(len(self.input_conn)):
 			if synapses[n]!=None:
-				# weighted_inputs.append(transforms[n]*synapses[n].filt(signals[n],dt=self.P['dt_nengo']))
-				weighted_inputs.append(transforms[n]*decoder_sim.data[probes[n]].T)
+				# weighted_inputs.append(transforms[n]*signals[n][0])
+				# weighted_inputs.append(transforms[n]*decoder_sim.data[probes[n]].T)
+				filt1=synapses[n].filt(transforms[n]*signals[n][0],dt=self.P['dt_nengo'])
+				filt2=synapses[n].filt(filt1,dt=self.P['dt_nengo'])
+				weighted_inputs.append(filt2)
 			else:
-				weighted_inputs.append(transforms[n]*signals[n])
+				weighted_inputs.append(transforms[n]*signals[n][0])
 
 		self.upsilon=np.sum(np.array(weighted_inputs),axis=0).T[:len(decoder_sim.trange())]
-		self.decoders,self.info=self.solver(self.activities,self.upsilon)
+		self.decoders,self.info=self.solver(self.activities_nengo,self.upsilon)
+		# if self.method=='ideal':
+		# 	self.decoders,self.info=self.solver(self.activities_nengo,self.upsilon)
+		# else:
+		# 	self.decoders,self.info=self.solver(self.activities_bio,self.upsilon)
+		if len(self.decoders.shape)==1:
+			self.decoders=self.decoders.reshape((self.decoders.shape[0],1))
+
+
+		if self.method == 'bio' and self.ens_post.label=='ens_bio':
+			bio_spikes_nengo=decoder_sim.data[p_ens_neurons]
+			bio_spikes_NEURON=np.array([np.array(nrn.spikes) for nrn in ens.neuron_type.neurons])
+			bio_spikes_train=ens.neuron_type.father_op.inputs[self.ens_pre.label]['bio_spikes']
+			for n in range(self.P['n_bio']):
+				print 'neuron %s nengo spikes:'%n, int(np.sum(bio_spikes_nengo[:,n])*self.P['dt_nengo'])
+				# print np.nonzero(bio_spikes_nengo[:,n])
+				print 'neuron %s NEURON spikes:'%n, len(bio_spikes_NEURON[n])
+				# print bio_spikes_NEURON[n]
+				print 'neuron %s training spikes:'%n, int(np.sum(bio_spikes_train[n])*self.P['dt_nengo'])
+				# print np.nonzero(bio_spikes_train[n])
+				print 'neuron %s bias:'%n, ens.neuron_type.father_op.inputs[self.ens_pre.label]['biases'][n]
+			# print ens.neuron_type.father_op.neurons.neurons
+
 		import matplotlib.pyplot as plt
 		import seaborn as sns
 		sns.set(context='poster')
 		figureA,axA=plt.subplots(1,1)
-		axA.plot(decoder_sim.trange(),lpf.filt(self.upsilon,dt=self.P['dt_nengo']),label='$x(t)$')
-		axA.plot(decoder_sim.trange(),np.dot(self.activities,self.decoders),label='$\hat{x}(t)$')
-		axA.set(xlabel='time',ylabel='value',title='rmse=%.3f'%self.info['rmses'][0])
+		axA.plot(decoder_sim.trange(),self.upsilon,label='$x(t)$')
+		axA.plot(decoder_sim.trange(),np.dot(self.activities_nengo,self.decoders),label='$\hat{x}(t)$')
+		axA.set(xlabel='time',ylabel='value',title='rmse=%.3f'%self.info['rmses'])
 		axA.legend()
-		figureA.savefig('decoder_accuracy.png')
+		figureA.savefig('decoder_accuracy_%s.png'%self.ens_post.label)
 
-		neuron.init()
 		del decoder_model
 		del decoder_sim
+		neuron.init()
 		return self.decoders, dict()
-
-		# '''
-		# # preloaded spike approach: load activities and eval_opints from optimize_bioneuron
-		# # '''
-		# #todo: concatenate activities and upsilon weighted by transform
-		# if self.P['rate_decode']=='ideal':
-		# 	self.activities=self.ens_post.neuron_type.father_op.inputs[self.ens_pre.label]['ideal_rates']
-		# 	self.upsilon=self.ens_post.neuron_type.father_op.inputs[self.ens_pre.label]['signal_in']
-		# 	self.decoders,self.info=self.solver(self.activities.T,self.upsilon)
-		# el

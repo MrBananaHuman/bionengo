@@ -25,7 +25,7 @@ def main():
 
 	with nengo.Network() as model:
 		'''NODES and ENSEMBLES'''
-		stim = nengo.Node(lambda t: raw_signal[:,int(t/P['dt_nengo'])]) #all dim, index at t
+		stim = nengo.Node(lambda t: raw_signal[:,np.floor(t/P['dt_nengo'])]) #all dim, index at t
 		pre=nengo.Ensemble(n_neurons=P['ens_pre_neurons'],dimensions=P['dim'],
 								seed=P['ens_pre_seed'],label='pre',
 								radius=P['radius_ideal'],
@@ -81,7 +81,7 @@ def main():
 		# 					synapse=P['tau'],
 		# 					transform=P['transform_pre2_to_ens'])
 
-		solver_ens_bio=CustomSolver(P,pre,ens_bio,model,method=P['rate_decode'])
+		solver_ens_bio=CustomSolver(P,pre,ens_bio,model,method=P['decoder_train'])
 		solver_ens_lif=CustomSolver(P,pre,ens_lif,model,method='ideal')
 
 		# nengo.Connection(ens_bio,ens_bio,synapse=None,
@@ -107,7 +107,7 @@ def main():
 							synapse=P['tau'],
 							transform=P['transform_ens_to_ens2'])
 
-		solver_ens_bio2=CustomSolver(P,ens_bio,ens_bio2,model,method=P['rate_decode'])
+		solver_ens_bio2=CustomSolver(P,ens_bio,ens_bio2,model,method=P['decoder_train'])
 		solver_ens_lif2=CustomSolver(P,ens_lif,ens_lif2,model,method='ideal')
 
 
@@ -138,13 +138,14 @@ def main():
 	
 	figure1, (ax1,ax2,ax3,ax4) = plt.subplots(4,1,sharex=True)
 	ax1.plot(sim.trange(),sim.data[probe_stim])
-	# ax1.plot(sim.trange(),sim.data[probe_stim2])
 	ax1.set(ylabel='$x(t)$',ylim=((np.min(raw_signal),np.max(raw_signal))))
 	ymin=ax1.get_ylim()[0]
 	ymax=ax1.get_ylim()[1]	
 	ax2.plot(sim.trange(),sim.data[probe_pre])
-	# ax2.plot(sim.trange(),sim.data[probe_pre2])
 	ax2.set(ylabel='pre (lif)',ylim=((ymin,ymax)))
+
+	# ax1.plot(sim.trange(),sim.data[probe_stim2])
+	# ax2.plot(sim.trange(),sim.data[probe_pre2])
 
 	rmse_bio=np.sqrt(np.average((sim.data[probe_dir]-sim.data[probe_bio])**2))
 	rmse_lif=np.sqrt(np.average((sim.data[probe_dir]-sim.data[probe_lif])**2))
@@ -182,6 +183,69 @@ def main():
 	ax5.set(xlabel='time (s)',ylabel='bioneuron2 \nspikes',yticks=([]))
 
 	figure2.savefig('bioneuron_vs_LIF_activity.png')
+
+	from optimize_bioneuron import get_rates
+	import copy
+	bio_spikes_nengo=sim.data[probe_bio_spikes]
+	bio_spikes_NEURON=np.array([np.array(nrn.spikes) for nrn in ens_bio.neuron_type.neurons])
+	bio_spikes_train=ens_bio.neuron_type.father_op.inputs['pre']['bio_spikes']
+	for n in range(P['n_bio']):
+		print 'neuron %s nengo spikes:'%n, int(np.sum(bio_spikes_nengo[:,n])*P['dt_nengo'])
+		# print np.nonzero(bio_spikes_nengo[:,n])
+		print 'neuron %s NEURON spikes:'%n, len(bio_spikes_NEURON[n])
+		# print bio_spikes_NEURON[n]
+		print 'neuron %s training spikes:'%n, int(np.sum(bio_spikes_train[n])*P['dt_nengo'])
+		# print np.nonzero(bio_spikes_train[n])
+		print 'neuron %s bias from father_op:'%n, ens_bio.neuron_type.father_op.inputs['pre']['biases'][n]
+		print 'neuron %s bias from neuron:'%n, ens_bio.neuron_type.neurons[n].bias
+	# print ens_bio.neuron_type.father_op.neurons.neurons
+
+	P2=copy.copy(P)
+	P2['optimize']['t_final']=P['test']['t_final']
+	# ipdb.set_trace()
+	bio_rates_nengo=np.array([get_rates(P2,bio_spikes_nengo[:,n])[1] for n in range(P['n_bio'])])
+	bio_rates_NEURON=np.array([get_rates(P2,spike_times)[1] for spike_times in bio_spikes_NEURON]).T
+	bio_rates_train=np.array([get_rates(P2,spike_times)[1] for spike_times in bio_spikes_train]).T
+	ideal_rates=np.array([get_rates(P,sim.data[probe_lif_spikes][:,n])[1] for n in range(P['n_bio'])])
+
+
+	plots_per_subfig=1
+	n_subfigs=int(np.ceil(P['n_bio']/plots_per_subfig))
+	n_columns = 1
+	n_rows=n_subfigs // n_columns
+	n_rows+=n_subfigs % n_columns
+	position = range(1,n_subfigs + 1)
+	# figure2, axarr= plt.subplots(n_rows,n_columns)
+	k=0
+	for row in range(n_rows):
+		for column in range(n_columns):
+			figure,ax=plt.subplots(1,1)
+			# ax=axarr[row,column]
+			bio_rates_temp=[]
+			ideal_rates_temp=[]
+			for b in range(plots_per_subfig):
+				if k>=P['n_bio']: break
+				# ipdb.set_trace()
+				bio_rates_nengo_plot=ax.plot(sim.trange(),bio_rates_nengo[k],linestyle='-')
+				bio_rates_NEURON_plot=ax.plot(sim.trange(),bio_rates_NEURON[:,k],linestyle='-.',
+					color=bio_rates_nengo_plot[0].get_color())
+				bio_rates_train_plot=ax.plot(sim.trange(),bio_rates_train[:,k],linestyle=':',
+					color=bio_rates_nengo_plot[0].get_color())
+				ideal_rates_plot=ax.plot(sim.trange(),ideal_rates[k],linestyle='--',
+					color=bio_rates_nengo_plot[0].get_color())
+				ax.plot(0,0,color='k',linestyle='-',label='nengo')
+				ax.plot(0,0,color='k',linestyle='-.',label='NEURON')
+				ax.plot(0,0,color='k',linestyle=':',label='train')
+				ax.plot(0,0,color='k',linestyle='--',label='LIF')
+				ax.legend()
+				# bio_rates_temp.append(bio_rates[k])
+				# ideal_rates_temp.append(ideal_rates[k])
+				k+=1
+			# rmse=np.sqrt(np.average((np.array(bio_rates_temp)-np.array(ideal_rates_temp))**2))
+			ax.set(xlabel='time (s)',ylabel='firing rate (Hz)')#,title='rmse=%.5f'%rmse)
+			figure.savefig('a(t)_bio_vs_ideal_neurons_%s-%s'%(k-plots_per_subfig,k))
+			plt.close(figure)
+
 
 	# for nrn in ens_bio.neuron_type.neurons:
 	# 	print 'post simulation bias',nrn.bias
