@@ -29,8 +29,6 @@ class BahlNeuron(nengo.neurons.NeuronType):
 			self.bio_idx=bio_idx
 			self.bias = None
 			self.synapses = {}
-			# self.vectimes = {}
-			# self.vecstim = {}
 			self.netcons = {}
 		#creating cells in init() makes optimization run extra neurons;
 		#instead call this in build_connection()
@@ -58,14 +56,13 @@ class BahlNeuron(nengo.neurons.NeuronType):
 
 	def step_math(self,dt,spiked,neurons,voltage,time):
 		desired_t=time*1000
-		'''runs NEURON only for 1st bioensemble in model...OK because transmit_spikes happend already?'''
+		#runs NEURON only for 1st bioensemble in model...OK because transmit_spikes happend already?
 		neuron.run(desired_t) 
 		new_spiked=[]
 		new_voltage=[]
 		for nrn in neurons:
 			spike_times=np.array(nrn.spikes)
 			spike_times_last=np.array(nrn.spikes_last)
-			# if len(spike_times)>1: ipdb.set_trace()
 			count=len(spike_times)-len(spike_times_last)
 			# count=np.sum(spike_times>(time-dt)*1000)
 			new_spiked.append(count)
@@ -114,8 +111,6 @@ class SimBahlNeuron(Operator):
 	def init_connection(self,ens_pre_label,ens_pre_neurons,n_syn):
 		for bioneuron in self.neurons.neurons:
 			bioneuron.synapses[ens_pre_label]=np.empty((ens_pre_neurons,n_syn),dtype=object)
-			# bioneuron.vectimes[ens_pre_label]=np.empty((ens_pre_neurons),dtype=object)
-			# bioneuron.vecstim[ens_pre_label]=np.empty((ens_pre_neurons),dtype=object)
 			bioneuron.netcons[ens_pre_label]=np.empty((ens_pre_neurons,n_syn),dtype=object)
 
 	def load_weights(self,ens_pre_label):
@@ -206,16 +201,15 @@ class TransmitSpikes(Operator):
 				if spikes[n] > 0: #if this neuron spiked at this time, then
 					for nrn in self.neurons: #for each bioneuron
 						for syn in nrn.synapses[self.ens_pre_label][n]: #for each synapse conn. to input
-							syn.spike_in.event(1.0*time*1000) #add a spike at time t (ms)
+							syn.spike_in.event(1.0*time*1000) #add a spike at time t (ms) #ROUND??
 		return step
 
 @Builder.register(BahlNeuron)
 def build_bahlneuron(model,neuron_type,ens):
 	model.sig[ens]['voltage'] = Signal(np.zeros(ens.ensemble.n_neurons),
 						name='%s.voltage' %ens.ensemble.label)
-	op=SimBahlNeuron(neurons=neuron_type,
-						output=model.sig[ens]['out'],voltage=model.sig[ens]['voltage'],
-						states=[model.time])
+	op=SimBahlNeuron(neurons=neuron_type,output=model.sig[ens]['out'],
+						voltage=model.sig[ens]['voltage'],states=[model.time])
 	model.add_op(op)
 
 @Builder.register(nengo.Ensemble)
@@ -225,6 +219,7 @@ def build_ensemble(model,ens):
 @Builder.register(nengo.Connection)
 def build_connection(model,conn):
 	import copy
+	import os
 	use_nrn = (
 		isinstance(conn.post, nengo.Ensemble) and
 		isinstance(conn.post.neuron_type, BahlNeuron))
@@ -241,6 +236,8 @@ def build_connection(model,conn):
 			filenames_dir=directory+'filenames.txt'
 			with open(filenames_dir,'r') as df:
 				bahl_op.inputs[conn.pre.label]={'directory':directory,'filenames':json.load(df)}
+			# print 'directory',directory
+
 
 		#if there's no saved information about this input connection, do an optimization
 		elif conn.pre.label not in bahl_op.inputs:
@@ -264,9 +261,12 @@ def build_connection(model,conn):
 			P['conn_transform']=conn.transform
 			#biases either equal None (first optimization) or are set with load_weights after first
 			P['biases']=[bahl_op.neurons.neurons[n].bias for n in range(len(bahl_op.neurons.neurons))]
-			# print 'build connection biases', P['biases']
-			# directory=optimize_recurrent(P)
-			directory=optimize_bioneuron(P)
+			P['input_path']=P['directory']+P['ens_label']+'/'+P['ens_pre_label']+'/'
+			if os.path.exists(P['input_path']):
+				directory=P['input_path']
+			else:
+				# directory=optimize_recurrent(P)
+				directory=optimize_bioneuron(P)
 			filenames_dir=directory+'filenames.txt'
 			with open(filenames_dir,'r') as df:
 				bahl_op.inputs[conn.pre.label]={'directory':directory,'filenames':json.load(df)}
@@ -277,6 +277,16 @@ def build_connection(model,conn):
 		bahl_op.init_connection(conn.pre.label,conn.pre.n_neurons,P['n_syn'])
 		bahl_op.load_weights(conn.pre.label) 
 		bahl_op.save_optimization(conn.pre.label)
+		# for key in bahl_op.inputs.iterkeys():
+		# 	print 'key', key
+		# 	bahlop_weights=bahl_op.inputs[key]['weights']
+		# 	syn_weights=[]
+		# 	for nrn in bahl_op.neurons.neurons:
+		# 		for inpt in nrn.synapses[key]:
+		# 			for syn in inpt:
+		# 				syn_weights.append(syn.weight)
+		# 	print 'bahl_op_weights', bahlop_weights.sum()
+		# 	print 'syn_weights',np.array(syn_weights).sum()
 		model.add_op(TransmitSpikes(conn.pre.label,model.sig[conn]['in'],bahl_op,states=[model.time]))
 
 	else: #normal connection

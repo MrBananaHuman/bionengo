@@ -9,7 +9,7 @@ class ExpSyn():
         self.e_exc = e_exc
         self.e_inh = e_inh
         self.syn = neuron.h.ExpSyn(sec)
-        self.syn.tau=1000*self.tau
+        self.syn.tau=2*1000*self.tau #arbitrary 2x multiply to offset phase shift in bio decode
         self.weight = weight
         if self.weight >= 0.0: self.syn.e = self.e_exc
         else: self.syn.e = self.e_inh

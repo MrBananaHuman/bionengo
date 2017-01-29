@@ -73,12 +73,14 @@ def make_spikes_in(P,raw_signal):
 		signal = nengo.Node(lambda t: raw_signal[:,np.floor(t/P['dt_nengo'])]) #all dim, index at t
 		pre = nengo.Ensemble(n_neurons=P['ens_pre_neurons'],
 								dimensions=P['ens_pre_dim'],
-								max_rates=nengo.dists.Uniform(P['ens_pre_min_rate'],P['ens_pre_max_rate']),
-								seed=P['ens_pre_seed'],radius=P['ens_pre_radius'],)
+								radius=P['ens_pre_radius'],
+								seed=P['ens_pre_seed'],
+								max_rates=nengo.dists.Uniform(P['ens_pre_min_rate'],P['ens_pre_max_rate']))
 		ideal = nengo.Ensemble(n_neurons=P['ens_ideal_neurons'],
 								dimensions=P['ens_ideal_dim'],
-								max_rates=nengo.dists.Uniform(P['ens_ideal_min_rate'],P['ens_ideal_max_rate']),
-								seed=P['ens_ideal_seed'],radius=P['ens_ideal_radius'],)
+								radius=P['ens_ideal_radius'],
+								seed=P['ens_ideal_seed'],
+								max_rates=nengo.dists.Uniform(P['ens_ideal_min_rate'],P['ens_ideal_max_rate']))
 		nengo.Connection(signal,pre,synapse=None)
 		nengo.Connection(pre,ideal,synapse=P['tau'],transform=P['conn_transform'])
 		probe_signal = nengo.Probe(signal)
@@ -89,39 +91,9 @@ def make_spikes_in(P,raw_signal):
 	signal_in=opt_test.data[probe_signal]
 	spikes_in=opt_test.data[probe_pre]
 	spikes_ideal=opt_test.data[probe_ideal]
-	np.savez(P['inputs']+'lifdata.npz',
+	np.savez(P['input_path']+'lifdata.npz',
 			signal_in=signal_in,spikes_in=spikes_in,spikes_ideal=spikes_ideal)
 
-def make_spikes_in_recurrent(P,raw_signal):
-	import nengo
-	import numpy as np
-	import pandas as pd
-	import ipdb
-	with nengo.Network() as opt_model:
-		signal = nengo.Node(lambda t: raw_signal[:,np.floor(t/P['dt_nengo'])]) #all dim, index at t
-		# pre = nengo.Ensemble(n_neurons=P['ens_pre_neurons'],
-		# 						dimensions=P['ens_pre_dim'],
-		# 						max_rates=nengo.dists.Uniform(P['ens_pre_min_rate'],
-		# 														P['ens_pre_max_rate']),
-		# 						seed=P['ens_pre_seed'],radius=P['ens_pre_radius'],)
-		ideal = nengo.Ensemble(n_neurons=P['ens_ideal_neurons'],
-								dimensions=P['ens_ideal_dim'],
-								max_rates=nengo.dists.Uniform(P['ens_ideal_min_rate'],
-																P['ens_ideal_max_rate']),
-								seed=P['ens_ideal_seed'],radius=P['ens_ideal_radius'],)
-		# nengo.Connection(signal,pre,synapse=None)
-		# nengo.Connection(pre,ideal,synapse=P['tau']) #need to multiply by B
-		nengo.Connection(signal,ideal,synapse=None,transform=P['conn_transform'])
-		nengo.Connection(ideal,ideal,synapse=P['tau']) #need to multiply by A
-		probe_signal = nengo.Probe(signal)
-		# probe_pre = nengo.Probe(pre.neurons,'spikes')
-		probe_ideal = nengo.Probe(ideal.neurons,'spikes')
-	with nengo.Simulator(opt_model,dt=P['dt_nengo']) as opt_test:
-		opt_test.run(P['optimize']['t_final'])
-	signal_in=opt_test.data[probe_signal]
-	spikes_ideal=opt_test.data[probe_ideal]
-	np.savez(P['inputs']+'lifdata.npz',
-			signal_in=signal_in,spikes_in=spikes_ideal,spikes_ideal=spikes_ideal)
 
 def weight_rescale(location):
 	#interpolation
@@ -280,6 +252,45 @@ def compare_bio_ideal_rates(P,filenames):
 	# plt.tight_layout()
 	# figure2.savefig('a(t)_bio_vs_ideal.png')
 
+def decode_signal(P,filenames):
+	import numpy as np
+	import nengo
+	import ipdb
+	import json
+	import matplotlib.pyplot as plt
+	import seaborn as sns
+
+	biopop=[]
+	for filename in filenames:
+		with open(filename,'r') as data_file: 
+			bioneuron=json.load(data_file)
+		biopop.append(bioneuron)
+
+	timesteps=np.arange(0,P['optimize']['t_final'],P['dt_nengo'])
+	signal_in=np.array(biopop[0]['signal_in'])
+	bio_spikes=np.array([np.array(biopop[b]['bio_spikes']) for b in range(len(biopop))]).T
+	ideal_spikes=np.array([np.array(biopop[b]['ideal_spikes']) for b in range(len(biopop))]).T
+	bio_rates=np.array([np.array(biopop[b]['bio_rates']) for b in range(len(biopop))])
+	ideal_rates=np.array([np.array(biopop[b]['ideal_rates']) for b in range(len(biopop))])	
+
+	upsilon_bio=nengo.Lowpass(P['tau']).filt(nengo.Lowpass(P['tau']).filt(signal_in))
+	upsilon_ideal=nengo.Lowpass(P['tau']).filt(nengo.Lowpass(P['tau']).filt(signal_in))
+	activities_bio=bio_rates.T
+	activities_ideal=ideal_rates.T
+	solver=nengo.solvers.LstsqL2()
+	decoders_bio,info_bio=solver(activities_bio,upsilon_bio)
+	decoders_ideal,info_ideal=solver(activities_ideal,upsilon_ideal)
+
+	sns.set(context='poster')
+	figure1, ax = plt.subplots(1, 1,sharex=True)
+	ax.plot(timesteps,upsilon_bio,label='$x(t)$')
+	ax.plot(timesteps,np.dot(activities_bio,decoders_bio),label='bio $\hat{x}(t)$'+
+				'rmse=%.3f'%info_bio['rmses'])
+	ax.plot(timesteps,np.dot(activities_ideal,decoders_ideal),label='ideal $\hat{x}(t)$'+
+				'rmse=%.3f'%info_ideal['rmses'])
+	ax.set(xlabel='time',ylabel='value')
+	ax.legend()
+	figure1.savefig('decoder_accuracy_training_%s.png'%P['ens_label'])
 
 '''
 BIONEURON METHODS 
@@ -302,28 +313,17 @@ class Bahl():
 		self.bias_current.dur = 1e9  # TODO; limits simulation time
 		self.bias_current.amp = self.bias
 		self.synapses = {P['ens_pre_label']:np.empty((P['ens_pre_neurons'],P['n_syn']),dtype=object)}
-		self.vectimes = {P['ens_pre_label']:np.empty((P['ens_pre_neurons']),dtype=object)}
-		self.vecstim = {P['ens_pre_label']:np.empty((P['ens_pre_neurons']),dtype=object)}
+		# self.vectimes = {P['ens_pre_label']:np.empty((P['ens_pre_neurons']),dtype=object)}
+		# self.vecstim = {P['ens_pre_label']:np.empty((P['ens_pre_neurons']),dtype=object)}
 		self.netcons = {P['ens_pre_label']:np.empty((P['ens_pre_neurons'],P['n_syn']),dtype=object)}
 		# self.synapses = {P['ens_pre_label']:{}}
 		# self.netcons = {P['ens_pre_label']:{}}
-		for n in range(P['ens_pre_neurons']):
-			for s in range(P['n_syn']):
+		for n in range(weights.shape[0]):
+			for s in range(weights.shape[1]):
 				section=self.cell.apical(locations[n][s])
 				weight=weights[n][s]
 				synapse=ExpSyn(section,weight,P['tau'])
-				self.synapses[P['ens_pre_label']][n][s]=synapse
-		# for a in range(P['ens_pre_neurons']):
-		# 	self.synapses[P['ens_pre_label']][a]=[]
-		# 	self.vecstim[P['ens_pre_label']][a]=[]
-		# 	self.vectimes[P['ens_pre_label']][a]=[]
-		# 	self.netcons[P['ens_pre_label']][a]=[]
-		# for n in range(P['ens_pre_neurons']):
-		# 	for s in range(P['n_syn']):
-		# 		section=self.cell.apical(locations[n][s])
-		# 		weight=weights[n][s]
-		# 		synapse=ExpSyn(section,weight,P['tau'])
-		# 		self.synapses[P['ens_pre_label']][n].append(synapse)		
+				self.synapses[P['ens_pre_label']][n][s]=synapse	
 		self.v_record = neuron.h.Vector()
 		self.v_record.record(self.cell.soma(0.5)._ref_v)
 		self.ap_counter = neuron.h.APCount(self.cell.soma(0.5))
@@ -346,6 +346,17 @@ class Bahl():
 				netcon.weight[0]=abs(syn.weight)
 				self.netcons[P['ens_pre_label']][n][s]=netcon
 
+	def event_step(self,P,time,spikes_in):
+		import numpy as np
+		import neuron
+		import ipdb
+		# ipdb.set_trace()
+		for n in range(spikes_in.shape[0]): #for each input neuron
+			if spikes_in[n] > 0: #if this input neuron spiked at this time, then
+				for syn in self.synapses[P['ens_pre_label']][n]: #for each synapse conn. to input
+					syn.spike_in.event(time*P['dt_nengo']*1000) #add a spike at time (ms)
+		neuron.run(time*P['dt_nengo']*1000)
+
 	# def connect_vecstim(self,P,spikes_in):
 	# 	import numpy as np
 	# 	import neuron
@@ -359,6 +370,15 @@ class Bahl():
 	# 			netcon=neuron.h.NetCon(self.vecstim[P['ens_pre_label']][n][-1],syn.syn)
 	# 			netcon.weight[0]=abs(syn.weight)
 	# 			self.netcons[P['ens_pre_label']][n].append(netcon)
+
+def run_bioneuron_events(P,bioneuron,spikes_in):
+	import neuron
+	import numpy as np
+	import ipdb
+	neuron.h.dt = P['dt_neuron']*1000
+	neuron.init()
+	for time in range(spikes_in.shape[0]):
+		bioneuron.event_step(P,time,spikes_in[time])
 
 def run_bioneuron(P):
 	import neuron
@@ -382,7 +402,7 @@ def export_bioneuron(P,run_id,bias,weights,locations,signal_in,spikes_in,
 		'bio_rates': bio_rates.tolist(),
 		'loss': loss,
 		}
-	with open(P['inputs']+run_id+'_bioneuron_%s.json'%P['bio_idx'], 'w') as data_file:
+	with open(P['input_path']+run_id+'_bioneuron_%s.json'%P['bio_idx'], 'w') as data_file:
 		json.dump(to_export, data_file)
 
 '''
@@ -405,7 +425,8 @@ def run_hyperopt(P):
 			algo=hyperopt.tpe.suggest,
 			max_evals=(t+1),
 			trials=trials)
-		print 'Neuron %s hyperopt %s%%' %(P['bio_idx'],100.0*(t+1)/P['evals'])
+		print 'Connection %s to %s, neuron %s hyperopt %s%%'\
+				%(P['ens_pre_label'],P['ens_label'],P['bio_idx'],100.0*(t+1)/P['evals'])
 	losses=[t['result']['loss'] for t in trials]
 	ids=[t['result']['run_id'] for t in trials]
 	idx=np.argmin(losses)
@@ -414,7 +435,7 @@ def run_hyperopt(P):
 	ax1.plot(range(len(trials)),losses)
 	ax1.set(xlabel='trial',ylabel='total loss')
 	figure1.savefig('hyperopt_performance.png')
-	filename=P['inputs']+best_run_id+"_bioneuron_%s.json"%P['bio_idx']
+	filename=P['input_path']+best_run_id+"_bioneuron_%s.json"%P['bio_idx']
 	return filename
 
 def simulate(P):
@@ -426,7 +447,7 @@ def simulate(P):
 
 	start=timeit.default_timer()
 	run_id=make_addon(6)
-	lifdata=np.load(P['inputs']+'lifdata.npz')
+	lifdata=np.load(P['input_path']+'lifdata.npz')
 	signal_in=lifdata['signal_in']
 	spikes_ideal=lifdata['spikes_ideal'][:,P['bio_idx']]
 	if P['spikes_train']=='bio' and P['ens_pre_type']=='BahlNeuron()':# and P['ens_pre_label']!=P['ens_label']:
@@ -444,8 +465,9 @@ def simulate(P):
 			locations[n][i]=P['locations']['%s_%s'%(n,i)]
 
 	bioneuron = Bahl(P,bias,locations,weights)
-	bioneuron.connect_vecstim(P,spikes_in)
-	run_bioneuron(P)
+	run_bioneuron_events(P,bioneuron,spikes_in)
+	# bioneuron.connect_vecstim(P,spikes_in)
+	# run_bioneuron(P)
 	
 	bio_spikes, bio_rates=get_rates(P,np.array(bioneuron.spikes))
 	ideal_spikes, ideal_rates=get_rates(P,spikes_ideal)
@@ -467,17 +489,14 @@ def optimize_bioneuron(P):
 	from pathos.multiprocessing import ProcessingPool as Pool
 	
 	P=copy.copy(P)
-	P['inputs']=P['directory']+P['ens_label']+'/'+P['ens_pre_label']+'/'
-	if os.path.exists(P['inputs']):
-		return P['inputs']
+	# P['input_path']=P['directory']+P['ens_label']+'/'+P['ens_pre_label']+'/'
+	# if os.path.exists(P['input_path']):
+	# 	return P['input_path']
 	raw_signal=make_signal(P['optimize'])
-	os.makedirs(P['inputs'])
-	os.chdir(P['inputs'])
+	os.makedirs(P['input_path'])
+	os.chdir(P['input_path'])
 	print 'Optimizing connection from %s to %s' %(P['ens_pre_label'],P['ens_label'])
-	if P['ens_pre_label'] == P['ens_label'] and P['train_recurrent']==True:
-		make_spikes_in_recurrent(P,raw_signal)
-	else:
-		make_spikes_in(P,raw_signal)
+	make_spikes_in(P,raw_signal)
 	P_list=[]
 	pool = Pool(nodes=P['n_processes'])
 	for bio_idx in range(P['n_bio']):
@@ -488,5 +507,6 @@ def optimize_bioneuron(P):
 	with open('filenames.txt','wb') as outfile:
 		json.dump(filenames,outfile)
 	compare_bio_ideal_rates(P,filenames)
+	decode_signal(P,filenames)
 	os.chdir(P['directory'])
-	return P['inputs']
+	return P['input_path']
