@@ -193,21 +193,21 @@ class CustomSolver(nengo.solvers.Solver):
 
 		if self.method == 'bio': #reset neuron state of bahl neurons in test simulation
 			# ipdb.set_trace()
-			if self.ens_post.label=='ens_bio':
-				figureC,(ax1,ax2,ax3)=plt.subplots(3,1,sharex=True)
-				rasterplot(decoder_sim.trange(),decoder_sim.data[probes_spikes[0]],ax=ax1,use_eventplot=True)
-				ax1.set(ylabel='pre spikes',yticks=([]))			
-				# rasterplot(decoder_sim.trange(),decoder_sim.data[probes_spikes[1]],ax=ax2,use_eventplot=True)
-				# ax2.set(ylabel='pre2 spikes',yticks=([]))			
-				# rasterplot(decoder_sim.trange(),decoder_sim.data[probes_spikes[2]],ax=ax3,use_eventplot=True)
-				# ax3.set(ylabel='pre3 spikes',yticks=([]))
-				figureC.savefig('pre_spikes_%s.png'%self.ens_post.label)
-			if self.ens_post.label=='ens_bio2':
-				figureD,ax1=plt.subplots(1,1,sharex=True)
-				rasterplot(decoder_sim.trange(),decoder_sim.data[probes_spikes[0]],ax=ax1,use_eventplot=True)
-				ax1.set(ylabel='pre spikes',yticks=([]))			
-				figureD.savefig('pre_spikes_%s.png'%self.ens_post.label)
-				# axV.plot(np.array(ens.neuron_type.neurons[0].t_record),np.array(ens.neuron_type.neurons[0].v_record))
+			# if self.ens_post.label=='ens_bio':
+			# 	figureC,(ax1,ax2,ax3)=plt.subplots(3,1,sharex=True)
+			# 	rasterplot(decoder_sim.trange(),decoder_sim.data[probes_spikes[0]],ax=ax1,use_eventplot=True)
+			# 	ax1.set(ylabel='pre spikes',yticks=([]))			
+			# 	# rasterplot(decoder_sim.trange(),decoder_sim.data[probes_spikes[1]],ax=ax2,use_eventplot=True)
+			# 	# ax2.set(ylabel='pre2 spikes',yticks=([]))			
+			# 	# rasterplot(decoder_sim.trange(),decoder_sim.data[probes_spikes[2]],ax=ax3,use_eventplot=True)
+			# 	# ax3.set(ylabel='pre3 spikes',yticks=([]))
+			# 	figureC.savefig('pre_spikes_%s.png'%self.ens_post.label)
+			# if self.ens_post.label=='ens_bio2':
+			# 	figureD,ax1=plt.subplots(1,1,sharex=True)
+			# 	rasterplot(decoder_sim.trange(),decoder_sim.data[probes_spikes[0]],ax=ax1,use_eventplot=True)
+			# 	ax1.set(ylabel='pre spikes',yticks=([]))			
+			# 	figureD.savefig('pre_spikes_%s.png'%self.ens_post.label)
+			# 	# axV.plot(np.array(ens.neuron_type.neurons[0].t_record),np.array(ens.neuron_type.neurons[0].v_record))
 			from synapses import ExpSyn
 			for ens in self.bioensembles:
 				for nrn in ens.neuron_type.neurons:

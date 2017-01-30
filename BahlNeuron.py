@@ -199,10 +199,18 @@ class TransmitSpikes(Operator):
 		def step():
 			'event-based method'
 			for n in range(spikes.shape[0]): #for each input neuron
-				if spikes[n] > 0 and np.random.rand()<self.transform: #if this neuron spiked at this time, then
-					for nrn in self.neurons: #for each bioneuron
-						for syn in nrn.synapses[self.ens_pre_label][n]: #for each synapse conn. to input
-							syn.spike_in.event(1.0*time*1000) #add a spike at time t (ms) #ROUND??
+				if self.transform == 0.0: break
+				assert self.transform >= 0, 'transform %s must be nonnegative' %self.transform
+				n_seg=int(np.ceil(self.transform)) #number of time segments to attempt spike transmission
+				prob=self.transform/n_seg #probability of spike transmission at each time segment
+				for t_seg in range(n_seg):
+				# for t_seg in np.arange(time,time+dt,dt/n_seg): #for each time segment,
+					t=time+(neuron.h.dt/1000)*t_seg
+					if spikes[n] > 0 and np.random.rand()<prob: #if input neuron spiked and probablistic transmission succeeds
+						for nrn in self.neurons: #for each bioneuron
+							#should probability be here?
+							for syn in nrn.synapses[self.ens_pre_label][n]: #for each synapse conn. to input
+								syn.spike_in.event(1.0*t*1000) #add a spike at time t (ms)??
 		return step
 
 @Builder.register(BahlNeuron)

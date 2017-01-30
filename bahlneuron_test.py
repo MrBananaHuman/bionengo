@@ -232,14 +232,14 @@ def main():
 	ax1.set(ylabel='$x(t)$') #,ylim=((np.min(raw_signal),np.max(raw_signal)))
 	ymin=ax1.get_ylim()[0]
 	ymax=ax1.get_ylim()[1]	
-	ax2.set(ylabel='pre (lif)',ylim=((ymin,ymax)))
+	ax2.set(ylabel='pre (lif)')#,ylim=((ymin,ymax)))
 
 	rmse_bio=np.sqrt(np.average((sim.data[probe_dir]-sim.data[probe_bio])**2))
 	rmse_lif=np.sqrt(np.average((sim.data[probe_dir]-sim.data[probe_lif])**2))
 	ax3.plot(sim.trange(),sim.data[probe_bio],label='bio, rmse=%.3f'%rmse_bio)
 	ax3.plot(sim.trange(),sim.data[probe_lif],label='lif, rmse=%.3f'%rmse_lif)
 	ax3.plot(sim.trange(),sim.data[probe_dir],label='direct')
-	ax3.set(ylabel='ens_1 $\hat{x}(t)$',ylim=((ymin,ymax)))
+	ax3.set(ylabel='ens_1 $\hat{x}(t)$')#,ylim=((ymin,ymax)))
 	legend3=ax3.legend()
 
 	rmse_bio2=np.sqrt(np.average((sim.data[probe_dir2]-sim.data[probe_bio2])**2))
@@ -247,7 +247,7 @@ def main():
 	ax4.plot(sim.trange(),sim.data[probe_bio2],label='bio, rmse=%.3f'%rmse_bio2)
 	ax4.plot(sim.trange(),sim.data[probe_lif2],label='lif, rmse=%.3f'%rmse_lif2)
 	ax4.plot(sim.trange(),sim.data[probe_dir2],label='direct')
-	ax4.set(ylabel='ens_2 $\hat{x}(t)$',ylim=((ymin,ymax)))
+	ax4.set(ylabel='ens_2 $\hat{x}(t)$')#,ylim=((ymin,ymax)))
 	legend4=ax4.legend()
 
 	rmse_bio3=np.sqrt(np.average((sim.data[probe_dir3]-sim.data[probe_bio3])**2))
@@ -255,7 +255,7 @@ def main():
 	ax5.plot(sim.trange(),sim.data[probe_bio3],label='bio, rmse=%.3f'%rmse_bio3)
 	ax5.plot(sim.trange(),sim.data[probe_lif3],label='lif, rmse=%.3f'%rmse_lif3)
 	ax5.plot(sim.trange(),sim.data[probe_dir3],label='direct')
-	ax5.set(ylabel='ens_3 $\hat{x}(t)$',ylim=((ymin,ymax)))
+	ax5.set(ylabel='ens_3 $\hat{x}(t)$')#,ylim=((ymin,ymax)))
 	legend5=ax5.legend()
 
 	rmse_bio4=np.sqrt(np.average((sim.data[probe_dir4]-sim.data[probe_bio4])**2))
@@ -263,7 +263,7 @@ def main():
 	ax6.plot(sim.trange(),sim.data[probe_bio4],label='bio, rmse=%.3f'%rmse_bio4)
 	ax6.plot(sim.trange(),sim.data[probe_lif4],label='lif, rmse=%.3f'%rmse_lif4)
 	ax6.plot(sim.trange(),sim.data[probe_dir4],label='direct')
-	ax6.set(ylabel='ens_4 $\hat{x}(t)$',ylim=((ymin,ymax)))
+	ax6.set(ylabel='ens_4 $\hat{x}(t)$')#,ylim=((ymin,ymax)))
 	legend6=ax6.legend()
 
 	figure1.savefig('bioneuron_vs_LIF_decode.png')
