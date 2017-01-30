@@ -74,7 +74,7 @@ class CustomSolver(nengo.solvers.Solver):
 		# ipdb.set_trace()
 		if self.P['decoder_train']=='load_bio' and self.method != 'ideal': #no ens_pre anymore
 			self.activities=self.ens_post.neuron_type.father_op.inputs[self.ens_pre.label]['bio_rates']
-			self.upsilon=nengo.Lowpass(self.P['tau']).filt(
+			self.upsilon=nengo.Lowpass(self.P['kernel']['tau']).filt(
 				self.ens_post.neuron_type.father_op.inputs[self.ens_pre.label]['signal_in'],
 				dt=self.P['dt_nengo'])
 			self.decoders,self.info=self.solver(self.activities.T,self.upsilon)
@@ -131,7 +131,7 @@ class CustomSolver(nengo.solvers.Solver):
 		with nengo.Simulator(decoder_model, dt=self.P['dt_nengo']) as decoder_sim:
 			decoder_sim.run(self.P['decode']['t_final'])
 
-		lpf=nengo.Lowpass(self.P['tau'])
+		lpf=nengo.Lowpass(self.P['kernel']['tau'])
 		self.activities_nengo=lpf.filt(decoder_sim.data[p_ens_neurons],dt=self.P['dt_nengo'])
 
 		weighted_inputs=[]

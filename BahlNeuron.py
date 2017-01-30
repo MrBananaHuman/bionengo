@@ -180,10 +180,11 @@ class SimBahlNeuron(Operator):
 				losses=self.inputs[conn_pre_label]['losses'])
 
 class TransmitSpikes(Operator):
-	def __init__(self,ens_pre_label,spikes,bahl_op,states):
+	def __init__(self,ens_pre_label,spikes,bahl_op,transform,states):
 		self.ens_pre_label=ens_pre_label
 		self.spikes=spikes
 		self.neurons=bahl_op.neurons.neurons
+		self.transform=transform
 		self.time=states[0]
 		self.reads=[spikes,states[0]]
 		self.updates=[]
@@ -198,7 +199,7 @@ class TransmitSpikes(Operator):
 		def step():
 			'event-based method'
 			for n in range(spikes.shape[0]): #for each input neuron
-				if spikes[n] > 0: #if this neuron spiked at this time, then
+				if spikes[n] > 0 and np.random.rand()<self.transform: #if this neuron spiked at this time, then
 					for nrn in self.neurons: #for each bioneuron
 						for syn in nrn.synapses[self.ens_pre_label][n]: #for each synapse conn. to input
 							syn.spike_in.event(1.0*time*1000) #add a spike at time t (ms) #ROUND??
@@ -287,7 +288,8 @@ def build_connection(model,conn):
 		# 				syn_weights.append(syn.weight)
 		# 	print 'bahl_op_weights', bahlop_weights.sum()
 		# 	print 'syn_weights',np.array(syn_weights).sum()
-		model.add_op(TransmitSpikes(conn.pre.label,model.sig[conn]['in'],bahl_op,states=[model.time]))
+		model.add_op(TransmitSpikes(conn.pre.label,model.sig[conn]['in'],bahl_op,
+									transform=conn.transform,states=[model.time]))
 
 	else: #normal connection
 		return nengo.builder.connection.build_connection(model, conn)

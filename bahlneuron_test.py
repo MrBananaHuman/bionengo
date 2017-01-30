@@ -64,27 +64,29 @@ def main():
 		ens_dir2=nengo.Ensemble(n_neurons=1,dimensions=P['dim'],
 								neuron_type=nengo.Direct(),label='ens_dir2')
 
-		# ens_bio3=nengo.Ensemble(n_neurons=P['n_bio'],dimensions=P['dim'],
-		# 						neuron_type=BahlNeuron(P),label='ens_bio3',										
-		# 						seed=P['ens_ideal3_seed'],radius=P['radius_ideal'],
-		# 						max_rates=nengo.dists.Uniform(P['min_ideal_rate'],P['max_ideal_rate']))
-		# ens_lif3=nengo.Ensemble(n_neurons=P['n_bio'],dimensions=P['dim'],
-		# 						neuron_type=nengo.LIF(),seed=P['ens_ideal3_seed'],
-		# 						radius=P['radius_ideal'],label='ens_lif3',
-		# 						max_rates=nengo.dists.Uniform(P['min_ideal_rate'],P['max_ideal_rate']))
-		# ens_dir3=nengo.Ensemble(n_neurons=1,dimensions=P['dim'],
-		# 						neuron_type=nengo.Direct(),label='ens_dir3')
+		ens_bio3=nengo.Ensemble(n_neurons=P['n_bio'],dimensions=P['dim'],
+								neuron_type=BahlNeuron(P),label='ens_bio3',										
+								seed=P['ens_ideal3_seed'],radius=P['radius_ideal'],
+								max_rates=nengo.dists.Uniform(P['min_ideal_rate'],P['max_ideal_rate']))
+		ens_lif3=nengo.Ensemble(n_neurons=P['n_bio'],dimensions=P['dim'],
+								neuron_type=nengo.LIF(),seed=P['ens_ideal3_seed'],
+								radius=P['radius_ideal'],label='ens_lif3',
+								max_rates=nengo.dists.Uniform(P['min_ideal_rate'],P['max_ideal_rate']))
+		ens_dir3=nengo.Ensemble(n_neurons=1,dimensions=P['dim'],
+								neuron_type=nengo.Direct(),label='ens_dir3')
 
-		# ens_bio4=nengo.Ensemble(n_neurons=P['n_bio'],dimensions=P['dim'],
-		# 						neuron_type=BahlNeuron(P),label='ens_bio4',										
-		# 						seed=P['ens_ideal4_seed'],radius=P['radius_ideal'],
-		# 						max_rates=nengo.dists.Uniform(P['min_ideal_rate'],P['max_ideal_rate']))
-		# ens_lif4=nengo.Ensemble(n_neurons=P['n_bio'],dimensions=P['dim'],
-		# 						neuron_type=nengo.LIF(),seed=P['ens_ideal4_seed'],
-		# 						radius=P['radius_ideal'],label='ens_lif4',
-		# 						max_rates=nengo.dists.Uniform(P['min_ideal_rate'],P['max_ideal_rate']))
-		# ens_dir4=nengo.Ensemble(n_neurons=1,dimensions=P['dim'],
-		# 						neuron_type=nengo.Direct(),label='ens_dir4')
+		ens_bio4=nengo.Ensemble(n_neurons=P['n_bio'],dimensions=P['dim'],
+								neuron_type=BahlNeuron(P),label='ens_bio4',										
+								seed=P['ens_ideal4_seed'],radius=P['radius_ideal'],
+								max_rates=nengo.dists.Uniform(P['min_ideal_rate'],P['max_ideal_rate']))
+		ens_lif4=nengo.Ensemble(n_neurons=P['n_bio'],dimensions=P['dim'],
+								neuron_type=nengo.LIF(),seed=P['ens_ideal4_seed'],
+								radius=P['radius_ideal'],label='ens_lif4',
+								max_rates=nengo.dists.Uniform(P['min_ideal_rate'],P['max_ideal_rate']))
+		ens_dir4=nengo.Ensemble(n_neurons=1,dimensions=P['dim'],
+								neuron_type=nengo.Direct(),label='ens_dir4')
+
+
 		'''CONNECTIONS'''																
 		nengo.Connection(stim,pre,synapse=None)
 		nengo.Connection(pre,ens_bio,
@@ -109,25 +111,25 @@ def main():
 							transform=P['transform_pre2_to_ens'])
 
 		nengo.Connection(stim3,pre3,synapse=None)
-		nengo.Connection(pre3,ens_bio,
+		nengo.Connection(pre3,ens_bio3,
 							synapse=P['tau'],
-							transform=P['transform_pre3_to_ens'])
-		nengo.Connection(pre3,ens_lif,
+							transform=P['transform_pre3_to_ens3'])
+		nengo.Connection(pre3,ens_lif3,
 							synapse=P['tau'],
-							transform=P['transform_pre3_to_ens'])
-		nengo.Connection(stim3,ens_dir,
+							transform=P['transform_pre3_to_ens3'])
+		nengo.Connection(stim3,ens_dir3,
 							synapse=P['tau'],
-							transform=P['transform_pre3_to_ens'])
+							transform=P['transform_pre3_to_ens3'])
 
 
 		solver_ens_bio=CustomSolver(P,ens_bio,model,method=P['decoder_train'])
 		solver_ens_lif=CustomSolver(P,ens_lif,model,method='ideal')
 
 		# nengo.Connection(ens_bio,ens_bio,synapse=None,
-		# 					transform=P['transform_ens_to_ens'],
+		# 					transform=P['transform_ens_to_ens2'],
 		# 					solver=solver_ens_bio)
 		# nengo.Connection(ens_lif,ens_lif,
-		# 					transform=P['transform_ens_to_ens'],
+		# 					transform=P['transform_ens_to_ens2'],
 		# 					synapse=P['tau'],
 		# 					solver=solver_ens_lif)
 
@@ -150,68 +152,68 @@ def main():
 		solver_ens_lif2=CustomSolver(P,ens_lif2,model,method='ideal')
 
 
-		# nengo.Connection(ens_bio2,ens_bio3,
-		# 					synapse=P['tau'],
-		# 					solver=solver_ens_bio2,
-		# 					transform=P['transform_ens2_to_ens3'])
-		# nengo.Connection(ens_lif2,ens_lif3,
-		# 					synapse=P['tau'],
-		# 					solver=solver_ens_lif2,
-		# 					transform=P['transform_ens2_to_ens3'])
-		# nengo.Connection(ens_dir2,ens_dir3,
-		# 					synapse=P['tau'],
-		# 					transform=P['transform_ens2_to_ens3'])
+		nengo.Connection(ens_bio2,ens_bio3,
+							synapse=P['tau'],
+							solver=solver_ens_bio2,
+							transform=P['transform_ens2_to_ens3'])
+		nengo.Connection(ens_lif2,ens_lif3,
+							synapse=P['tau'],
+							solver=solver_ens_lif2,
+							transform=P['transform_ens2_to_ens3'])
+		nengo.Connection(ens_dir2,ens_dir3,
+							synapse=P['tau'],
+							transform=P['transform_ens2_to_ens3'])
 
-		# solver_ens_bio3=CustomSolver(P,ens_bio2,ens_bio3,model,method=P['decoder_train'])
-		# solver_ens_lif3=CustomSolver(P,ens_lif2,ens_lif3,model,method='ideal')
+		solver_ens_bio3=CustomSolver(P,ens_bio3,model,method=P['decoder_train'])
+		solver_ens_lif3=CustomSolver(P,ens_lif3,model,method='ideal')
 
-		# nengo.Connection(ens_bio3,ens_bio4,
-		# 					synapse=P['tau'],
-		# 					solver=solver_ens_bio3,
-		# 					transform=P['transform_ens3_to_ens4'])
-		# nengo.Connection(ens_lif3,ens_lif4,
-		# 					synapse=P['tau'],
-		# 					solver=solver_ens_lif3,
-		# 					transform=P['transform_ens3_to_ens4'])
-		# nengo.Connection(ens_dir3,ens_dir4,
-		# 					synapse=P['tau'],
-		# 					transform=P['transform_ens3_to_ens4'])
+		nengo.Connection(ens_bio3,ens_bio4,
+							synapse=P['tau'],
+							solver=solver_ens_bio3,
+							transform=P['transform_ens3_to_ens4'])
+		nengo.Connection(ens_lif3,ens_lif4,
+							synapse=P['tau'],
+							solver=solver_ens_lif3,
+							transform=P['transform_ens3_to_ens4'])
+		nengo.Connection(ens_dir3,ens_dir4,
+							synapse=P['tau'],
+							transform=P['transform_ens3_to_ens4'])
 
-		# solver_ens_bio4=CustomSolver(P,ens_bio3,ens_bio4,model,method=P['decoder_train'])
-		# solver_ens_lif4=CustomSolver(P,ens_lif3,ens_lif4,model,method='ideal')
+		solver_ens_bio4=CustomSolver(P,ens_bio4,model,method=P['decoder_train'])
+		solver_ens_lif4=CustomSolver(P,ens_lif4,model,method='ideal')
 
 
 		'''PROBES'''
 		probe_stim=nengo.Probe(stim,synapse=None)
-		probe_pre=nengo.Probe(pre,synapse=P['tau'])
+		probe_pre=nengo.Probe(pre,synapse=P['kernel']['tau'])
 		probe_stim2=nengo.Probe(stim2,synapse=None)
-		probe_pre2=nengo.Probe(pre2,synapse=P['tau'])
+		probe_pre2=nengo.Probe(pre2,synapse=P['kernel']['tau'])
 		probe_stim3=nengo.Probe(stim3,synapse=None)
-		probe_pre3=nengo.Probe(pre3,synapse=P['tau'])
+		probe_pre3=nengo.Probe(pre3,synapse=P['kernel']['tau'])
 
 		probe_bio_spikes=nengo.Probe(ens_bio.neurons,'spikes')
 		probe_lif_spikes=nengo.Probe(ens_lif.neurons,'spikes')
-		probe_bio=nengo.Probe(ens_bio,synapse=P['tau'],solver=solver_ens_bio)
-		probe_lif=nengo.Probe(ens_lif,synapse=P['tau'],solver=solver_ens_lif)
-		probe_dir=nengo.Probe(ens_dir,synapse=P['tau'])
+		probe_bio=nengo.Probe(ens_bio,synapse=P['kernel']['tau'],solver=solver_ens_bio)
+		probe_lif=nengo.Probe(ens_lif,synapse=P['kernel']['tau'],solver=solver_ens_lif)
+		probe_dir=nengo.Probe(ens_dir,synapse=P['kernel']['tau'])
 
 		probe_bio_spikes2=nengo.Probe(ens_bio2.neurons,'spikes')
 		probe_lif_spikes2=nengo.Probe(ens_lif2.neurons,'spikes')
-		probe_bio2=nengo.Probe(ens_bio2,synapse=P['tau'],solver=solver_ens_bio2)
-		probe_lif2=nengo.Probe(ens_lif2,synapse=P['tau'],solver=solver_ens_lif2)
-		probe_dir2=nengo.Probe(ens_dir2,synapse=P['tau'])
+		probe_bio2=nengo.Probe(ens_bio2,synapse=P['kernel']['tau'],solver=solver_ens_bio2)
+		probe_lif2=nengo.Probe(ens_lif2,synapse=P['kernel']['tau'],solver=solver_ens_lif2)
+		probe_dir2=nengo.Probe(ens_dir2,synapse=P['kernel']['tau'])
 
-		# probe_bio_spikes3=nengo.Probe(ens_bio3.neurons,'spikes')
-		# probe_lif_spikes3=nengo.Probe(ens_lif3.neurons,'spikes')
-		# probe_bio3=nengo.Probe(ens_bio3,synapse=P['tau'],solver=solver_ens_bio3)
-		# probe_lif3=nengo.Probe(ens_lif3,synapse=P['tau'],solver=solver_ens_lif3)
-		# probe_dir3=nengo.Probe(ens_dir3,synapse=P['tau'])
+		probe_bio_spikes3=nengo.Probe(ens_bio3.neurons,'spikes')
+		probe_lif_spikes3=nengo.Probe(ens_lif3.neurons,'spikes')
+		probe_bio3=nengo.Probe(ens_bio3,synapse=P['kernel']['tau'],solver=solver_ens_bio3)
+		probe_lif3=nengo.Probe(ens_lif3,synapse=P['kernel']['tau'],solver=solver_ens_lif3)
+		probe_dir3=nengo.Probe(ens_dir3,synapse=P['kernel']['tau'])
 
-		# probe_bio_spikes4=nengo.Probe(ens_bio4.neurons,'spikes')
-		# probe_lif_spikes4=nengo.Probe(ens_lif4.neurons,'spikes')
-		# probe_bio4=nengo.Probe(ens_bio4,synapse=P['tau'],solver=solver_ens_bio4)
-		# probe_lif4=nengo.Probe(ens_lif4,synapse=P['tau'],solver=solver_ens_lif4)
-		# probe_dir4=nengo.Probe(ens_dir4,synapse=P['tau'])
+		probe_bio_spikes4=nengo.Probe(ens_bio4.neurons,'spikes')
+		probe_lif_spikes4=nengo.Probe(ens_lif4.neurons,'spikes')
+		probe_bio4=nengo.Probe(ens_bio4,synapse=P['kernel']['tau'],solver=solver_ens_bio4)
+		probe_lif4=nengo.Probe(ens_lif4,synapse=P['kernel']['tau'],solver=solver_ens_lif4)
+		probe_dir4=nengo.Probe(ens_dir4,synapse=P['kernel']['tau'])
 
 	with nengo.Simulator(model,dt=P['dt_nengo']) as sim:
 		sim.run(P['test']['t_final'])
@@ -222,9 +224,9 @@ def main():
 	ax1.plot(sim.trange(),sim.data[probe_stim],label='stim')
 	ax1.plot(sim.trange(),sim.data[probe_stim2],label='stim2')
 	ax1.plot(sim.trange(),sim.data[probe_stim3],label='stim3')
-	ax2.plot(sim.trange(),sim.data[probe_pre],label='pre')
-	ax2.plot(sim.trange(),sim.data[probe_pre2],label='pre2')
-	ax2.plot(sim.trange(),sim.data[probe_pre3],label='pre3')
+	ax2.plot(sim.trange(),sim.data[probe_pre],label='pre_to_ens_1')
+	ax2.plot(sim.trange(),sim.data[probe_pre2],label='pre2_to_ens_1')
+	ax2.plot(sim.trange(),sim.data[probe_pre3],label='pre3_to_ens_2')
 	legend1=ax1.legend()
 	legend2=ax2.legend()
 	ax1.set(ylabel='$x(t)$') #,ylim=((np.min(raw_signal),np.max(raw_signal)))
@@ -248,21 +250,21 @@ def main():
 	ax4.set(ylabel='ens_2 $\hat{x}(t)$',ylim=((ymin,ymax)))
 	legend4=ax4.legend()
 
-	# rmse_bio3=np.sqrt(np.average((sim.data[probe_dir3]-sim.data[probe_bio3])**2))
-	# rmse_lif3=np.sqrt(np.average((sim.data[probe_dir3]-sim.data[probe_lif3])**2))
-	# ax5.plot(sim.trange(),sim.data[probe_bio3],label='bio, rmse=%.3f'%rmse_bio3)
-	# ax5.plot(sim.trange(),sim.data[probe_lif3],label='lif, rmse=%.3f'%rmse_lif3)
-	# ax5.plot(sim.trange(),sim.data[probe_dir3],label='direct')
-	# ax5.set(ylabel='ens_3 $\hat{x}(t)$',ylim=((ymin,ymax)))
-	# legend4=ax5.legend()
+	rmse_bio3=np.sqrt(np.average((sim.data[probe_dir3]-sim.data[probe_bio3])**2))
+	rmse_lif3=np.sqrt(np.average((sim.data[probe_dir3]-sim.data[probe_lif3])**2))
+	ax5.plot(sim.trange(),sim.data[probe_bio3],label='bio, rmse=%.3f'%rmse_bio3)
+	ax5.plot(sim.trange(),sim.data[probe_lif3],label='lif, rmse=%.3f'%rmse_lif3)
+	ax5.plot(sim.trange(),sim.data[probe_dir3],label='direct')
+	ax5.set(ylabel='ens_3 $\hat{x}(t)$',ylim=((ymin,ymax)))
+	legend5=ax5.legend()
 
-	# rmse_bio4=np.sqrt(np.average((sim.data[probe_dir4]-sim.data[probe_bio4])**2))
-	# rmse_lif4=np.sqrt(np.average((sim.data[probe_dir4]-sim.data[probe_lif4])**2))
-	# ax6.plot(sim.trange(),sim.data[probe_bio4],label='bio, rmse=%.3f'%rmse_bio4)
-	# ax6.plot(sim.trange(),sim.data[probe_lif4],label='lif, rmse=%.3f'%rmse_lif4)
-	# ax6.plot(sim.trange(),sim.data[probe_dir4],label='direct')
-	# ax6.set(ylabel='ens_4 $\hat{x}(t)$',ylim=((ymin,ymax)))
-	# legend4=ax6.legend()
+	rmse_bio4=np.sqrt(np.average((sim.data[probe_dir4]-sim.data[probe_bio4])**2))
+	rmse_lif4=np.sqrt(np.average((sim.data[probe_dir4]-sim.data[probe_lif4])**2))
+	ax6.plot(sim.trange(),sim.data[probe_bio4],label='bio, rmse=%.3f'%rmse_bio4)
+	ax6.plot(sim.trange(),sim.data[probe_lif4],label='lif, rmse=%.3f'%rmse_lif4)
+	ax6.plot(sim.trange(),sim.data[probe_dir4],label='direct')
+	ax6.set(ylabel='ens_4 $\hat{x}(t)$',ylim=((ymin,ymax)))
+	legend6=ax6.legend()
 
 	figure1.savefig('bioneuron_vs_LIF_decode.png')
 

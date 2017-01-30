@@ -82,7 +82,7 @@ def make_spikes_in(P,raw_signal):
 								seed=P['ens_ideal_seed'],
 								max_rates=nengo.dists.Uniform(P['ens_ideal_min_rate'],P['ens_ideal_max_rate']))
 		nengo.Connection(signal,pre,synapse=None)
-		nengo.Connection(pre,ideal,synapse=P['tau'],transform=P['conn_transform'])
+		nengo.Connection(pre,ideal,synapse=P['tau']) #,transform=P['conn_transform']
 		probe_signal = nengo.Probe(signal)
 		probe_pre = nengo.Probe(pre.neurons,'spikes')
 		probe_ideal = nengo.Probe(ideal.neurons,'spikes')
@@ -273,8 +273,8 @@ def decode_signal(P,filenames):
 	bio_rates=np.array([np.array(biopop[b]['bio_rates']) for b in range(len(biopop))])
 	ideal_rates=np.array([np.array(biopop[b]['ideal_rates']) for b in range(len(biopop))])	
 
-	upsilon_bio=nengo.Lowpass(P['tau']).filt(nengo.Lowpass(P['tau']).filt(signal_in))
-	upsilon_ideal=nengo.Lowpass(P['tau']).filt(nengo.Lowpass(P['tau']).filt(signal_in))
+	upsilon_bio=nengo.Lowpass(P['kernel']['tau']).filt(nengo.Lowpass(P['kernel']['tau']).filt(signal_in))
+	upsilon_ideal=nengo.Lowpass(P['kernel']['tau']).filt(nengo.Lowpass(P['kernel']['tau']).filt(signal_in))
 	activities_bio=bio_rates.T
 	activities_ideal=ideal_rates.T
 	solver=nengo.solvers.LstsqL2()
