@@ -6,6 +6,7 @@ import copy
 import ipdb
 import json
 import os
+from optimize_bioneuron_system_onebyone import load_bioneuron_system, optimize_bioneuron_system
 
 class BahlNeuron(nengo.neurons.NeuronType):
 	'''compartmental neuron from Bahl et al 2012'''
@@ -14,6 +15,8 @@ class BahlNeuron(nengo.neurons.NeuronType):
 	def __init__(self,P):
 		super(BahlNeuron,self).__init__()
 		self.P=P
+		if self.P['load_weights']==True: self.best_results_file=True
+		else: self.best_results_file=None
 
 	def create(self,bio_idx):
 		return self.Bahl(bio_idx)
@@ -70,6 +73,20 @@ class BahlNeuron(nengo.neurons.NeuronType):
 		spiked[:]=np.array(new_spiked)/dt
 		voltage[:]=np.array(new_voltage)
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 '''
 Builder #############################################################################3
 '''		
@@ -88,9 +105,9 @@ class SimBahlNeuron(Operator):
 		self.incs=[]
 		self.P=self.neurons.P
 		self.ens_atributes=None #stores nengo information about the ensemble
-		self.best_result_file=None
 		self.inputs={}
-		self.neurons.neurons=[self.neurons.create(i)for i in range(output.shape[0])]
+		self.neurons.neurons=[self.neurons.create(i) for i in range(output.shape[0])]
+		self.best_results_file=self.neurons.best_results_file
 
 	def make_step(self,signals,dt,rng):
 		output=signals[self.output]
@@ -106,24 +123,36 @@ class SimBahlNeuron(Operator):
 			if not hasattr(bioneuron,'cell'):
 				bioneuron.add_cell()
 
-	def init_connection(self):
+	def init_connections(self):
 		from synapses import ExpSyn
 		for bionrn in range(len(self.neurons.neurons)):
 			bioneuron=self.neurons.neurons[bionrn]
+			bioneuron.bias=np.load(self.best_results_file[bionrn]+'/bias.npz')['bias']
 			for inpt in self.inputs.iterkeys():
 				pre_neurons=self.inputs[inpt]['pre_neurons']
 				pre_synapses=self.P['n_syn']
 				bioneuron.synapses[inpt]=np.empty((pre_neurons,pre_synapses),dtype=object)
 				# bioneuron.netcons[inpt]=np.empty((pre_neurons,pre_synapses),dtype=object)	
-				weights=np.load(self.best_result_file+str(bionrn)+inpt+'_weights.npz')['weights']
-				locations=np.load(self.best_result_file+str(bionrn)+inpt+'_locations.npz')['locations']
+				weights=np.load(self.best_results_file[bionrn]+'/'+inpt+'_weights.npz')['weights']
+				locations=np.load(self.best_results_file[bionrn]+'/'+inpt+'_locations.npz')['locations']
 				for pre in range(pre_neurons):
 					for syn in range(pre_synapses):	
 						section=bioneuron.cell.apical(locations[pre][syn])
 						weight=weights[pre][syn]
 						synapse=ExpSyn(section,weight,self.P['tau'])
-						self.synapses[inpt][pre][syn]=synapse
+						bioneuron.synapses[inpt][pre][syn]=synapse
 			bioneuron.start_recording()
+
+
+
+
+
+
+
+
+
+
+
 
 
 class TransmitSpikes(Operator):
@@ -136,8 +165,6 @@ class TransmitSpikes(Operator):
 		self.updates=[]
 		self.sets=[]
 		self.incs=[]
-		neuron.h.dt = bahl_op.P['dt_neuron']*1000
-		neuron.init()
 
 	def make_step(self,signals,dt,rng):
 		spikes=signals[self.spikes]
@@ -174,7 +201,6 @@ def build_connection(model,conn):
 		P=copy.copy(conn.post.neuron_type.P)
 		bahl_op=conn.post.neuron_type.father_op
 		if bahl_op.ens_atributes==None:
-			# ipdb.set_trace()
 			bahl_op.ens_atributes={}
 			bahl_op.ens_atributes['label']=conn.post.label
 			bahl_op.ens_atributes['neurons']=conn.post.n_neurons
@@ -183,7 +209,8 @@ def build_connection(model,conn):
 			bahl_op.ens_atributes['max_rate']=conn.post.max_rates.high
 			bahl_op.ens_atributes['radius']=conn.post.radius
 			bahl_op.ens_atributes['seed']=conn.post.seed
-		#if there's no saved information about this input connection, do an optimization
+		#if there's no saved information about this input connection,
+		#save the connection info and later optimize
 		if conn.pre.label not in bahl_op.inputs:
 			bahl_op.inputs[conn.pre.label]={}
 			bahl_op.inputs[conn.pre.label]['pre_label']=conn.pre.label
@@ -202,38 +229,16 @@ def build_connection(model,conn):
 
 
 
-def unknown_builder_function(model):
-	return
-	#this should get called after all __call() of CustomSolver
-	#for bahl_op in model.operators:
-		#bahl_op.init_cells()
-		#bahl_op.init_connections()
-		#for inpt in bahl_op.inputs.iterkeys():
-			#conn = grab connection from inpt to bahl_op
-			#model.add_op(TransmitSpikes(inpt,model.sig[conn]['in'],bahl_op,states=[model.time]))
-
-class CustomSolver(nengo.solvers.Solver):
-	def __init__(self,P,ens_post,model,method):
-		self.P=P
-		self.ens_post=ens_post
-		self.method=method
-		self.weights=False #decoders not weights
-		self.bahl_op=None
-		self.activities=None
-		self.target=None
-		self.decoders=None
-		self.solver=nengo.solvers.LstsqL2()
-
-	def __call__(self,A,Y,rng=None,E=None):
-		if self.decoders != None:
-			return self.decoders, dict()
-		elif isinstance(self.ens_post.neuron_type, BahlNeuron):
-			#todo: don't optimize if filenames already exists
-			from optimize_bioneuron_system import optimize_bioneuron_system
-			self.P['ens_post']=self.ens_post
-			best_results_file, targets, activities = optimize_bioneuron_system(self.P)
-			self.ens_post.neuron_type.father_op.best_results_file=best_results_file
-			self.targets=targets
-			self.activities=activities
-			self.decoders=self.solver(self.activities,self.targets)[0]
-		return self.decoders, dict()
+def post_build_func(model,network):
+	#this function get called in simulator.py after models are built but before signals are created
+	for op in model.operators:
+		if isinstance(op, SimBahlNeuron):
+			op.init_cells()
+			op.init_connections()
+			dt_neuron=op.P['dt_neuron']*1000
+			for conn in network.all_connections:
+				if conn.pre_obj.label in op.inputs and conn.post_obj.label == op.ens_atributes['label']:
+					model.add_op(TransmitSpikes(
+						conn.pre_obj.label,model.sig[conn.pre]['out'],op,states=[model.time]))
+	neuron.h.dt = dt_neuron
+	neuron.init()

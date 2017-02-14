@@ -106,8 +106,10 @@ def weight_rescale(location):
 	scaled_weight=1.0/f_voltage_att(location)
 	return scaled_weight
 
-def add_search_space(P,bio_idx):
+def add_search_space(P,bio_idx,rng):
+	import copy
 	#adds a hyperopt-distributed weight, location, bias for each synapse
+	# P=copy.copy(P_in)
 	import numpy as np
 	import hyperopt
 	P['bio_idx']=bio_idx
@@ -116,10 +118,12 @@ def add_search_space(P,bio_idx):
 	if P['biases'][bio_idx]==None:
 		#for first optimization draw from hyperopt distribution
 		P['biases'][bio_idx]=hyperopt.hp.uniform('b_%s'%bio_idx,P['bias_min'],P['bias_max'])
+		# P['hyperopt_bias']=hyperopt.hp.uniform('b_%s'%bio_idx,P['bias_min'],P['bias_max'])
+	#list of hyperopt hp uniforms gets drawn from in a weird way
 	for n in range(P['ens_pre_neurons']):
 		for i in range(P['n_syn']): 
 			P['locations']['%s_%s'%(n,i)] =\
-				np.round(np.random.uniform(0.0,1.0),decimals=2)
+				np.round(rng.uniform(0.0,1.0),decimals=2)
 			#scale max weight to statistics of conn.pre ensemble and synapse location:
 			#farther along dendrite means higher max weights allowed
 			#fewer neurons and lower max_rates means higher max weights allowed
@@ -420,7 +424,9 @@ def run_hyperopt(P):
 	import seaborn
 	trials=hyperopt.Trials()
 	for t in range(P['evals']):
+		my_seed=P['hyperopt_seed']+P['ens_ideal_seed']+P['bio_idx']*(t+1)
 		best=hyperopt.fmin(simulate,
+			rstate=np.random.RandomState(seed=my_seed),
 			space=P,
 			algo=hyperopt.tpe.suggest,
 			max_evals=(t+1),
@@ -457,17 +463,32 @@ def simulate(P):
 		spikes_in=lifdata['spikes_in']
 	weights=np.zeros((P['ens_pre_neurons'],P['n_syn']))
 	locations=np.zeros((P['ens_pre_neurons'],P['n_syn']))
+
 	bias=P['biases'][P['bio_idx']]
-	# print 'optimization bias', bias
+
+	# bias=P['hyperopt_bias']
+	# #ugly hack to maintain current structure, for comparison with newer _system.py files
+	# bias_array=[]
+	# for b in range(len(P['biases'])):
+	# 	bias_array.append(P['biases'][b])
+	# bias_array[P['bio_idx']]=bias
+	# P['biases']=bias_array
+	# # print 'optimization bias', bias
+
+
 	for n in range(P['ens_pre_neurons']):
 		for i in range(P['n_syn']):
 			weights[n][i]=P['weights']['%s_%s'%(n,i)]
 			locations[n][i]=P['locations']['%s_%s'%(n,i)]
-
+	# print 'bionrn',P['bio_idx']
+	# print 'bias',bias,
+	# print 'weight',weights[-1][-1]
+	# print 'location',locations[-1][-1]
 	bioneuron = Bahl(P,bias,locations,weights)
 	run_bioneuron_events(P,bioneuron,spikes_in)
 	# bioneuron.connect_vecstim(P,spikes_in)
 	# run_bioneuron(P)
+	# print 'spikes',np.array(bioneuron.spikes)
 	
 	bio_spikes, bio_rates=get_rates(P,np.array(bioneuron.spikes))
 	ideal_spikes, ideal_rates=get_rates(P,spikes_ideal)
@@ -486,6 +507,7 @@ def optimize_bioneuron(P):
 	import copy
 	import ipdb
 	import os
+	import numpy as np
 	from pathos.multiprocessing import ProcessingPool as Pool
 	
 	P=copy.copy(P)
@@ -499,8 +521,9 @@ def optimize_bioneuron(P):
 	make_spikes_in(P,raw_signal)
 	P_list=[]
 	pool = Pool(nodes=P['n_processes'])
+	rng=np.random.RandomState(seed=P['hyperopt_seed']+P['ens_ideal_seed'])
 	for bio_idx in range(P['n_bio']):
-		P_idx=add_search_space(P,bio_idx)
+		P_idx=add_search_space(P,bio_idx,rng)
 		# f=run_hyperopt(P_idx)
 		P_list.append(copy.copy(P_idx))
 	filenames=pool.map(run_hyperopt, P_list)

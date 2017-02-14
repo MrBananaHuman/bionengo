@@ -180,7 +180,7 @@ class CustomSolver(nengo.solvers.Solver):
 		figureA,axA=plt.subplots(1,1)
 		axA.plot(decoder_sim.trange(),self.upsilon,label='$x(t)$')
 		axA.plot(decoder_sim.trange(),np.dot(self.activities_nengo,self.decoders),label='$\hat{x}(t)$')
-		axA.set(xlabel='time',ylabel='value',title='rmse=%.3f'%self.info['rmses'])
+		axA.set(xlabel='time',ylabel='value',title='rmse=%.5f'%self.info['rmses'])
 		axA.legend()
 		figureA.savefig('decoder_accuracy_%s.png'%self.ens_post.label)
 
@@ -234,5 +234,7 @@ class CustomSolver(nengo.solvers.Solver):
 
 		del decoder_model
 		del decoder_sim
-
+		# print 'activities', self.activities_nengo
+		# print 'target', self.upsilon
+		# print 'decoders', self.decoders
 		return self.decoders, dict()
