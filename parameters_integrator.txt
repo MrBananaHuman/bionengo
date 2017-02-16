@@ -1,0 +1,57 @@
+{
+	### NENGO ###
+	'dt_nengo':0.001, #change in optimize too
+	'dt_neuron':0.0001,
+	'ens_pre_neurons':50,
+	'n_bio':50,
+	'n_syn':5,
+	'dim':1, #change in optimize too
+	'ens_pre_seed':33,
+	'ens_ideal_seed':66,
+	'ens_ideal2_seed':99,
+	'min_ideal_rate':100, #60
+	'max_ideal_rate':120, #80
+	'radius_ideal':1,
+	'tau':0.05,
+	'synapse_type':'ExpSyn',
+
+	### SPIKE SMOOTHING ###
+	'kernel': #for smoothing spikes to calculate loss and activities
+		{'type':'lowpass','tau':0.05},
+		#{'type':'exp','tau':0.02},
+		#{'type':'gauss','sigma':0.02,},
+
+	### OPTIMIZATION ###
+	'evals':100,
+	'hyperopt_seed':369,
+	'w_0':0.001, #0.001
+	'bias_min':-1.0,
+	'bias_max':1.0,
+	'n_seg': 5,
+	'n_processes':10,
+	'optimize_locations':False,
+	'spikes_train':'ideal', #use spiking output of pre_bio vs. pre_lif to train next ens
+	'decoder_train':'simulate', #calculate decoders: _system 'load', 'simulate'; _old 'bio' vs 'ideal'
+
+	### NETWORK ###
+	'transform_pre_to_ens':0.25,
+	'transform_ens_to_ens':0.75,
+	'transform_ens_to_ens2':1.0,
+
+	### LOAD ###
+	#'directory':'/home/pduggins/bionengo/data/92PH369WZ/',
+	#'directory':'/home/pduggins/bionengo/data/RGEQUGQ5M/', #200 evals OS9XT4J8D 400 evals 50 nrns RGEQUGQ5M
+
+	### SIGNALS ###
+	'optimize': 
+		{'type':'sinusoid','t_final':3.0,'dt':0.001,'dim':1,'omega':2},
+		#{'type':'equalpower','t_final':10.0,'dt':0.001,'dim':1,'mean':0.0,'std':1.0,'max_freq':5.0,'seed':None},
+	'decode': 
+		{'type':'sinusoid','t_final':3.0,'dt':0.001,'dim':1,'omega':2},
+		#{'type':'constant','t_final':2.0,'dt':0.001,'dim':1,'mean':0.5},
+		#{'type':'equalpower','t_final':1.0,'dt':0.001,'dim':1,'mean':0.0,'std':1.0,'max_freq':5.0,'seed':None},
+	'test':
+		{'type':'sinusoid','t_final':3.0,'dt':0.001,'dim':1,'omega':2},
+		#{'type':'constant','t_final':3.0,'dt':0.001,'dim':1,'mean':0.5},
+		#{'type':'equalpower','t_final':3.0,'dt':0.001,'dim':1,'mean':0.0,'std':1.0,'max_freq':1.0,'seed':111},
+}

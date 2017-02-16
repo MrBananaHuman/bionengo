@@ -9,7 +9,7 @@ import seaborn as sns
 from nengo.utils.matplotlib import rasterplot
 from BahlNeuronSystem import BahlNeuron, post_build_func
 from CustomSolverSystem import CustomSolver
-from optimize_bioneuron_system import make_signal,ch_dir
+from optimize_bioneuron_system_onebyone import make_signal,ch_dir
 
 
 def main():

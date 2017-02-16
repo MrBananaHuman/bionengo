@@ -10,6 +10,28 @@ import scipy.stats
 def constant(dt,t_final,value):
     return np.ones(int(t_final/dt))*1.0*value
 
+def checkprime(n):
+    d=2
+    while d<=(n/2):
+        if n%d==0:
+            return 0
+        d+=1
+    return 1
+
+def primeno(term):
+    numbers=[]
+    i=2
+    while len(numbers)<term:
+        if checkprime(i)==1:
+            numbers.append(i)
+        i+=1
+    return numbers
+
+def sinusoid(dt,t_final,omega):
+    timesteps=np.arange(0,t_final,dt)
+    output=np.sin(timesteps*2*np.pi*omega)
+    return output
+
 def prime_sinusoids(dt,t_final,dim):
     import ipdb
     def checkprime(n):

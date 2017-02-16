@@ -19,6 +19,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from nengo.utils.matplotlib import rasterplot
 from pathos.multiprocessing import ProcessingPool as Pool
+import pickle
 
 def make_addon(N):
 	addon=str(''.join(random.choice(string.ascii_uppercase+string.digits) for _ in range(N)))
@@ -49,13 +50,15 @@ def make_signal(P):
 		std=P['std']
 		max_freq=P['max_freq']
 		seed=P['seed']
-		if seed == None:
-			seed=np.random.randint(99999999)
-	if signal_type=='prime_sinusoids':
-		raw_signal=signals.prime_sinusoids(dt,t_final,dim)
-		return raw_signal
+		if seed == None: seed=np.random.randint(99999999)
+	if signal_type == 'constant':
+		mean=P['mean']
+	if signal_type=='sinusoid':
+		omega=P['omega']
 	raw_signal=[]
 	for d in range(dim):
+		if signal_type=='sinusoid':
+			raw_signal.append(signals.sinusoid(dt,t_final,omega))
 		if signal_type=='constant':
 			raw_signal.append(signals.constant(dt,t_final,mean))
 		elif signal_type=='white':
@@ -77,6 +80,7 @@ def make_signal(P):
 	return np.array(raw_signal)
 
 def make_pre_and_ideal_spikes(P):
+	import signals as sigz
 	atrb=P['ens_post']['atrb']
 	signals={}
 	stims={}
@@ -87,7 +91,11 @@ def make_pre_and_ideal_spikes(P):
 	connections_ideal={}
 	p_stims={}
 	p_pres={}		
-	p_pres_spikes={}		
+	p_pres_spikes={}
+	if P['optimize']['type']=='sinusoid':
+		n_inputs=len(P['ens_post']['inpts'])
+		primes=sigz.primeno(n_inputs)
+		i=0
 	with nengo.Network() as opt_model:
 		ideal=nengo.Ensemble(
 				label=atrb['label'],
@@ -99,8 +107,12 @@ def make_pre_and_ideal_spikes(P):
 		p_ideal_spikes=nengo.Probe(ideal.neurons,'spikes')
 		for key in P['ens_post']['inpts'].iterkeys():
 			pre_atrb=P['ens_post']['inpts'][key]
-			signals[key]=make_signal(P['optimize'])
-			stims[key]=nengo.Node(lambda t, n=key: signals[key][:,np.floor(t/P['dt_nengo'])])
+			P_signal=copy.copy(P['optimize'])
+			if P_signal['type']=='sinusoid':
+				P_signal['omega']=primes[i]
+				i+=1
+			signals[key]=make_signal(P_signal)
+			stims[key]=nengo.Node(lambda t, key=key: signals[key][:,np.floor(t/P['dt_nengo'])])
 			pres[key]=nengo.Ensemble(
 					label=pre_atrb['pre_label'],
 					n_neurons=pre_atrb['pre_neurons'],
@@ -120,7 +132,7 @@ def make_pre_and_ideal_spikes(P):
 			p_pres[key]=nengo.Probe(pres[key],synapse=synapses[key])
 			p_pres_spikes[key]=nengo.Probe(pres[key].neurons,'spikes')
 	with nengo.Simulator(opt_model,dt=P['dt_nengo']) as opt_test:
-		opt_test.run(P['optimize']['t_final'])
+		opt_test.run(P_signal['t_final'])
 	all_signals_in=[]
 	lpf=nengo.Lowpass(P['kernel']['tau'])
 	for key in P['ens_post']['inpts'].iterkeys():
@@ -300,8 +312,11 @@ def compute_loss(P,rates_bio,rates_ideal):
 	return loss
 
 def export_data(P,weights,locations,bias,signals_spikes_pres,spikes_bio,spikes_ideal,rates_bio,rates_ideal):
-	os.makedirs('eval_%s_bioneuron_%s'%(P['eval'],P['hyperopt']['bionrn']))
-	os.chdir('eval_%s_bioneuron_%s'%(P['eval'],P['hyperopt']['bionrn']))
+	try:
+		os.makedirs('eval_%s_bioneuron_%s'%(P['eval'],P['hyperopt']['bionrn']))
+		os.chdir('eval_%s_bioneuron_%s'%(P['eval'],P['hyperopt']['bionrn']))
+	except OSError:
+		os.chdir('eval_%s_bioneuron_%s'%(P['eval'],P['hyperopt']['bionrn']))
 	np.savez('bias.npz',bias=bias)
 	np.savez('spikes_rates_bio_ideal.npz',
 				spikes_bio=spikes_bio,spikes_ideal=spikes_ideal,
@@ -350,7 +365,21 @@ def plot_spikes_rates(P,best_results_file,target_signal):
 		figure.savefig('bio_vs_ideal_rates_neuron_%s'%nrn)
 		plt.close(figure)
 
-
+def plot_hyperopt_loss(P,losses):
+	import pandas as pd
+	columns=('bioneuron','eval','loss')
+	df=pd.DataFrame(columns=columns,index=np.arange(0,losses.shape[0]*losses.shape[1]))
+	i=0
+	for bionrn in range(losses.shape[0]):
+		for hyp_eval in range(losses.shape[1]):
+			df.loc[i]=[bionrn,hyp_eval,losses[bionrn][hyp_eval]]
+			i+=1
+	sns.set(context='poster')
+	figure1,ax1=plt.subplots(1,1)
+	sns.regplot(x="eval",y="loss",data=df)
+	ax1.set(xlabel='trial',ylabel='loss')
+	figure1.savefig('total_hyperopt_performance.png')
+	plt.close(figure1)	
 
 
 
@@ -388,7 +417,12 @@ def simulate(P_hyperopt):
 	return {'loss': loss, 'eval':P['eval'], 'status': hyperopt.STATUS_OK} 
 
 def run_hyperopt(P_hyperopt):
-	trials=hyperopt.Trials()
+	#try loading hyperopt trials object from a previous run to pick up where it left off
+	os.chdir(P_hyperopt['directory']+P_hyperopt['ens_post']['atrb']['label'])
+	try:
+		trials=pickle.load(open('bioneuron_%s_hyperopt_trials.p'%P_hyperopt['hyperopt']['bionrn'],'rb'))
+	except IOError:
+		trials=hyperopt.Trials()
 	for t in range(P_hyperopt['evals']):
 		P_hyperopt['eval']=t
 		my_seed=P_hyperopt['hyperopt_seed']+P_hyperopt['ens_post']['atrb']['seed']+P_hyperopt['hyperopt']['bionrn']*(t+1)
@@ -413,8 +447,10 @@ def run_hyperopt(P_hyperopt):
 	ax1.set(xlabel='trial',ylabel='total loss')
 	figure1.savefig('bioneuron_%s_hyperopt_performance.png'%P_hyperopt['hyperopt']['bionrn'])
 	plt.close(figure1)
+	#save trials object for continued optimization later
+	pickle.dump(trials,open('bioneuron_%s_hyperopt_trials.p'%P_hyperopt['hyperopt']['bionrn'],'wb'))
 	#returns eval number with minimum loss for this bioneuron
-	return [P_hyperopt['hyperopt']['bionrn'],int(result)]
+	return [P_hyperopt['hyperopt']['bionrn'],int(result),losses] #added losses
 
 def load_bioneuron_system(P_in):
 	P=copy.copy(P_in)
@@ -438,8 +474,11 @@ def optimize_bioneuron_system(P_in):
 	P['ens_post']['inpts']=P_in['ens_post'].neuron_type.father_op.inputs
 	P['ens_post']['atrb']=P_in['ens_post'].neuron_type.father_op.ens_atributes
 	print 'Optimizing connections into %s' %P['ens_post']['atrb']['label']
-	os.makedirs(P['directory']+P['ens_post']['atrb']['label'])
-	os.chdir(P['directory']+P['ens_post']['atrb']['label'])
+	try:
+		os.makedirs(P['directory']+P['ens_post']['atrb']['label'])
+		os.chdir(P['directory']+P['ens_post']['atrb']['label'])
+	except OSError:
+		os.chdir(P['directory']+P['ens_post']['atrb']['label'])
 	#make and save spikes from pre and ideal populations
 	make_pre_and_ideal_spikes(P)
 	#run hyperopt to optimize biases, synaptic weights, (and locations)
@@ -454,15 +493,18 @@ def optimize_bioneuron_system(P_in):
 	#save a list of the evals associated with the minimum loss for each bioneuron [bioneuron,eval]
 	best_results_file=[]
 	rates_bio=[]
+	losses=[]
 	for bionrn in range(len(results)):
 		best_results_file.append(P['directory']+P['ens_post']['atrb']['label']+
 				'/eval_%s_bioneuron_%s'%(results[bionrn][1],bionrn))
 		spikes_rates_bio_ideal=np.load(best_results_file[-1]+'/spikes_rates_bio_ideal.npz')
 		rates_bio.append(spikes_rates_bio_ideal['rates_bio'])
+		losses.append(results[bionrn][2])
 	rates_bio=np.array(rates_bio).T
 	os.chdir(P['directory']+P['ens_post']['atrb']['label'])
 	target_signal=np.load('target_signal.npz')['target_signal']
 	#plot the spikes and rates of the best run
 	plot_spikes_rates(P,best_results_file,target_signal)
+	plot_hyperopt_loss(P,np.array(losses))
 	np.savez('best_results_file.npz',best_results_file=best_results_file)
 	return best_results_file,target_signal,rates_bio

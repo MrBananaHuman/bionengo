@@ -106,7 +106,7 @@ class SimBahlNeuron(Operator):
 		self.P=self.neurons.P
 		self.ens_atributes=None #stores nengo information about the ensemble
 		self.inputs={}
-		self.neurons.neurons=[self.neurons.create(i) for i in range(output.shape[0])]
+		self.neurons.neurons=[self.neurons.create(i) for i in range(self.P['n_bio'])] #range(output.shape[0]) for full
 		self.best_results_file=self.neurons.best_results_file
 
 	def make_step(self,signals,dt,rng):
@@ -233,12 +233,17 @@ def post_build_func(model,network):
 	#this function get called in simulator.py after models are built but before signals are created
 	for op in model.operators:
 		if isinstance(op, SimBahlNeuron):
+			# print op.ens_atributes['label']
+			# print 'Initializing cells'
 			op.init_cells()
+			# print 'Initializing connections'
 			op.init_connections()
 			dt_neuron=op.P['dt_neuron']*1000
 			for conn in network.all_connections:
 				if conn.pre_obj.label in op.inputs and conn.post_obj.label == op.ens_atributes['label']:
+					# print 'Adding TransmitSpikes operator to model'
 					model.add_op(TransmitSpikes(
 						conn.pre_obj.label,model.sig[conn.pre]['out'],op,states=[model.time]))
-	neuron.h.dt = dt_neuron
+	neuron.h.dt = dt_neuron #fails if no bioensembles present in model
 	neuron.init()
+	print 'NEURON initialized, beginning simulation...'

@@ -31,25 +31,27 @@ class CustomSolver(nengo.solvers.Solver):
 			return self.decoders, dict()
 		elif isinstance(self.ens_post.neuron_type, BahlNeuron):
 			self.P['ens_post']=self.ens_post
+			P=copy.copy(self.P)
+			P['ens_post']={}
+			P['ens_post']['inpts']=self.P['ens_post'].neuron_type.father_op.inputs
+			P['ens_post']['atrb']=self.P['ens_post'].neuron_type.father_op.ens_atributes
 			#don't optimize if filenames already exists
-			if self.ens_post.neuron_type.best_results_file != None:
-				#todo: restart a failed optimization run without freezing
-				best_results_file, targets, activities = load_bioneuron_system(self.P)
-			else:
-				best_results_file, targets, activities = optimize_bioneuron_system(self.P)
+			# if self.ens_post.neuron_type.best_results_file != None:
+			# 	#todo: restart a failed optimization run without freezing
+			# 	best_results_file, targets, activities = load_bioneuron_system(self.P)
+			# else:
+			best_results_file, targets, activities = optimize_bioneuron_system(self.P)
 			self.ens_post.neuron_type.father_op.best_results_file=best_results_file
 			if self.method == 'load':
 				#load activities/targets from the runs performed during optimization
+				print  'loading target signal and bioneuron activities for %s' %P['ens_post']['atrb']['label']
 				self.targets=targets
 				self.activities=activities
 				self.decoders=self.solver(self.activities,self.targets)[0]
 			elif self.method == 'simulate':
 				#use loaded weights/locations/biases to simulate new activities/targets
 				from optimize_bioneuron_system_onebyone import create_bioneuron
-				P=copy.copy(self.P)
-				P['ens_post']={}
-				P['ens_post']['inpts']=self.P['ens_post'].neuron_type.father_op.inputs
-				P['ens_post']['atrb']=self.P['ens_post'].neuron_type.father_op.ens_atributes
+				print  'simulating target signal and bioneuron activities for %s' %P['ens_post']['atrb']['label']
 				#generate new signals and input spikes
 				target,pre_spikes_list,ideal_spikes=make_pre_spikes(P)
 				#load in biases, locations, weights from best_results_files
@@ -113,6 +115,7 @@ class Bahl():
 
 
 def make_pre_spikes(P):
+	import signals as sigz
 	atrb=P['ens_post']['atrb']
 	signals={}
 	stims={}
@@ -124,6 +127,10 @@ def make_pre_spikes(P):
 	p_stims={}
 	p_pres={}		
 	p_pres_spikes={}		
+	if P['decode']['type']=='sinusoid':
+		n_inputs=len(P['ens_post']['inpts'])
+		primes=sigz.primeno(n_inputs)
+		i=0
 	with nengo.Network() as decode_model:
 		ideal=nengo.Ensemble(
 				label=atrb['label'],
@@ -135,8 +142,12 @@ def make_pre_spikes(P):
 		p_ideal_spikes=nengo.Probe(ideal.neurons,'spikes')
 		for key in P['ens_post']['inpts'].iterkeys():
 			pre_atrb=P['ens_post']['inpts'][key]
-			signals[key]=make_signal(P['decode'])
-			stims[key]=nengo.Node(lambda t, n=key: signals[key][:,np.floor(t/P['dt_nengo'])])
+			P_signal=copy.copy(P['optimize'])
+			if P_signal['type']=='sinusoid':
+				P_signal['omega']=primes[i]
+				i+=1
+			signals[key]=make_signal(P_signal)
+			stims[key]=nengo.Node(lambda t, key=key: signals[key][:,np.floor(t/P['dt_nengo'])])
 			pres[key]=nengo.Ensemble(
 					label=pre_atrb['pre_label'],
 					n_neurons=pre_atrb['pre_neurons'],
