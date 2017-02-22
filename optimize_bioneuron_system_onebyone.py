@@ -174,7 +174,7 @@ def weight_rescale(location):
 	scaled_weight=1.0/f_voltage_att(location)
 	return scaled_weight
 
-def make_hyperopt_search_space_onebyone(P_in,bionrn,rng):
+def make_hyperopt_search_space_onebyone(P_in,my_P,bionrn,rng):
 	#adds a hyperopt-distributed weight, location, bias for each synapse for each bioneuron,
 	#where each neuron is a seperate choice in hyperopt search space
 	P=copy.copy(P_in)
@@ -186,7 +186,7 @@ def make_hyperopt_search_space_onebyone(P_in,bionrn,rng):
 		ens_pre_info=P['ens_post']['inpts'][inpt]
 		for pre in range(ens_pre_info['pre_neurons']):
 			hyperparams[inpt][pre]={}
-			for syn in range(P['n_syn']):
+			for syn in range(my_P['n_syn']):
 				hyperparams[inpt][pre][syn]={}
 				if P['optimize_locations']==True:
 					hyperparams[inpt][pre][syn]['l']=hyperopt.hp.uniform('l_%s_%s_%s_%s'%(bionrn,inpt,pre,syn),0.0,1.0)
@@ -199,6 +199,9 @@ def make_hyperopt_search_space_onebyone(P_in,bionrn,rng):
 				k=k_distance*k_neurons*k_max_rates
 				hyperparams[inpt][pre][syn]['w']=hyperopt.hp.uniform('w_%s_%s_%s_%s'%(bionrn,inpt,pre,syn),-k*P['w_0'],k*P['w_0'])
 	P['hyperopt']=hyperparams
+	P['evals']=my_P['evals']
+	P['tau']=my_P['tau']
+	P['n_syn']=my_P['n_syn']
 	return P
 
 def load_signals_spikes(P):
@@ -376,7 +379,7 @@ def plot_hyperopt_loss(P,losses):
 			i+=1
 	sns.set(context='poster')
 	figure1,ax1=plt.subplots(1,1)
-	sns.regplot(x="eval",y="loss",data=df)
+	sns.tsplot(time="eval",value="loss",unit='bioneuron',data=df)
 	ax1.set(xlabel='trial',ylabel='loss')
 	figure1.savefig('total_hyperopt_performance.png')
 	plt.close(figure1)	
@@ -421,9 +424,11 @@ def run_hyperopt(P_hyperopt):
 	os.chdir(P_hyperopt['directory']+P_hyperopt['ens_post']['atrb']['label'])
 	try:
 		trials=pickle.load(open('bioneuron_%s_hyperopt_trials.p'%P_hyperopt['hyperopt']['bionrn'],'rb'))
+		hyp_evals=np.arange(len(trials),P_hyperopt['evals'])
 	except IOError:
 		trials=hyperopt.Trials()
-	for t in range(P_hyperopt['evals']):
+		hyp_evals=range(P_hyperopt['evals'])
+	for t in hyp_evals:
 		P_hyperopt['eval']=t
 		my_seed=P_hyperopt['hyperopt_seed']+P_hyperopt['ens_post']['atrb']['seed']+P_hyperopt['hyperopt']['bionrn']*(t+1)
 		best=hyperopt.fmin(simulate,
@@ -441,12 +446,12 @@ def run_hyperopt(P_hyperopt):
 	loss=np.min(losses)
 	result=str(ids[idx])
 	#plot hyperopt performance
-	sns.set(context='poster')
-	figure1,ax1=plt.subplots(1,1)
-	ax1.plot(range(len(trials)),losses)
-	ax1.set(xlabel='trial',ylabel='total loss')
-	figure1.savefig('bioneuron_%s_hyperopt_performance.png'%P_hyperopt['hyperopt']['bionrn'])
-	plt.close(figure1)
+	# sns.set(context='poster')
+	# figure1,ax1=plt.subplots(1,1)
+	# ax1.plot(range(len(trials)),losses)
+	# ax1.set(xlabel='trial',ylabel='total loss')
+	# figure1.savefig('bioneuron_%s_hyperopt_performance.png'%P_hyperopt['hyperopt']['bionrn'])
+	# plt.close(figure1)
 	#save trials object for continued optimization later
 	pickle.dump(trials,open('bioneuron_%s_hyperopt_trials.p'%P_hyperopt['hyperopt']['bionrn'],'wb'))
 	#returns eval number with minimum loss for this bioneuron
@@ -468,7 +473,7 @@ def load_bioneuron_system(P_in):
 	target_signal=np.load('target_signal.npz')['target_signal']
 	return best_results_file,target_signal,rates_bio
 
-def optimize_bioneuron_system(P_in):
+def optimize_bioneuron_system(P_in,my_P):
 	P=copy.copy(P_in)
 	P['ens_post']={}
 	P['ens_post']['inpts']=P_in['ens_post'].neuron_type.father_op.inputs
@@ -486,7 +491,7 @@ def optimize_bioneuron_system(P_in):
 	pool = Pool(nodes=P['n_processes'])
 	rng=np.random.RandomState(seed=P['hyperopt_seed']+P['ens_post']['atrb']['seed'])
 	for bionrn in range(P['ens_post']['atrb']['neurons']):
-		P_hyperopt=make_hyperopt_search_space_onebyone(P,bionrn,rng)
+		P_hyperopt=make_hyperopt_search_space_onebyone(P,my_P,bionrn,rng)
 		# run_hyperopt(P_hyperopt)
 		P_list.append(P_hyperopt)
 	results=pool.map(run_hyperopt,P_list)

@@ -60,6 +60,26 @@ def make_pre_ideal_spikes(P,network):
 		with opt_net: bio_dict[ens.label]['probe']=nengo.Probe(ens,synapse=ens.synapse)
 		bio_dict[ens.label]['inputs']={}
 		for conn in opt_net.connections:
-			if isinstance(conn.pre_obj,BahlNeuron):
+			if isinstance(conn.post_obj,BahlNeuron):
 				bio_dict[ens.label]['inputs'][conn.pre_obj.label]={}
-				with opt_net: bio_dict[ens.label]['inputs'][conn.pre_obj.label]['probe']=
+				with opt_net: 
+					bio_dict[ens.label]['inputs'][conn.pre_obj.label]['probe']=
+							nengo.Probe(conn.pre_obj.neurons,'spikes')
+	#rebuild network?
+	#define input signals and connect to inputs
+	with nengo.Simulator(opt_net,dt=P['dt_nengo']) as opt_sim:
+		opt_sim.run(P['optimize']['t_final'])
+	for bio in bio_dict.iterkeys():
+		try: 
+			os.makedirs(bio)
+			os.chdir(bio)
+		except OSError:
+			os.chdir(bio)
+		bio_dict[bio]['ideal_spikes']=opt_sim.data[bio_dict[bio]['probe']]
+		for inpt in bio_dict[bio]['inputs'].iterkeys():
+			bio_dict[bio]['inputs'][inpt]['pre_spikes']=
+					opt_sim.data[bio_dict[bio]['inputs'][inpt]['probe']]
+			np.savez('spikes_from_%s_to_%s.npz'%(inpt,bio),spikes=
+					bio_dict[bio]['inputs'][inpt]['pre_spikes'])
+		np.savez('spikes_ideal_%s.npz'%bio,spikes=bio_dict[bio]['ideal_spikes'])
+		os.chdir('..')

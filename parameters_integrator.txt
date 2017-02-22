@@ -2,31 +2,22 @@
 	### NENGO ###
 	'dt_nengo':0.001, #change in optimize too
 	'dt_neuron':0.0001,
-	'ens_pre_neurons':50,
-	'n_bio':50,
-	'n_syn':5,
-	'dim':1, #change in optimize too
-	'ens_pre_seed':33,
-	'ens_ideal_seed':66,
-	'ens_ideal2_seed':99,
-	'min_ideal_rate':100, #60
-	'max_ideal_rate':120, #80
-	'radius_ideal':1,
-	'tau':0.05,
-	'synapse_type':'ExpSyn',
+	'pre':{'n_neurons':5,'n_syn':5,'dim':1,'seed':33,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':1},
+	'ens1':{'n_neurons':10,'n_syn':5,'dim':1,'seed':66,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':2},
+	'ens2':{'n_neurons':10,'n_syn':5,'dim':1,'seed':99,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':2},
 
 	### SPIKE SMOOTHING ###
 	'kernel': #for smoothing spikes to calculate loss and activities
-		{'type':'lowpass','tau':0.05},
+		{'type':'lowpass','tau':0.1},
 		#{'type':'exp','tau':0.02},
 		#{'type':'gauss','sigma':0.02,},
 
 	### OPTIMIZATION ###
-	'evals':100,
 	'hyperopt_seed':369,
 	'w_0':0.001, #0.001
 	'bias_min':-1.0,
 	'bias_max':1.0,
+	'synapse_type':'ExpSyn',
 	'n_seg': 5,
 	'n_processes':10,
 	'optimize_locations':False,
@@ -34,13 +25,18 @@
 	'decoder_train':'simulate', #calculate decoders: _system 'load', 'simulate'; _old 'bio' vs 'ideal'
 
 	### NETWORK ###
-	'transform_pre_to_ens':0.25,
-	'transform_ens_to_ens':0.75,
+	'transform_pre_to_ens':0.1,
+	'transform_ens_to_ens':1.0,
 	'transform_ens_to_ens2':1.0,
 
 	### LOAD ###
-	#'directory':'/home/pduggins/bionengo/data/92PH369WZ/',
-	#'directory':'/home/pduggins/bionengo/data/RGEQUGQ5M/', #200 evals OS9XT4J8D 400 evals 50 nrns RGEQUGQ5M
+	'continue_optimization':False, 
+	#'directory':'/home/pduggins/bionengo/data/28LD8DJRD/', #400 evals 50 nrns T=0.1,0.9 tau=0.05
+	#'directory':'/home/pduggins/bionengo/data/3G2RJLW2A/', #300 evals 100 nrns T=0.1,1.0 equalpower
+	#'directory':'/home/pduggins/bionengo/data/D3XERYTD4/', #500 evals 100 nrns T=0.1,1.0 
+	#'directory':'/home/pduggins/bionengo/data/1EATMG1L4/', #200-600 evals 100 nrns T=0.05,1.0 
+	#'directory':'/home/pduggins/bionengo/data/8BMWCE73X/', #200 evals 50 nrns T=0.25,0.75  
+	#'directory':'/home/pduggins/bionengo/data/RGEQUGQ5M/', #200 evals OS9XT4J8D 400 evals 50 nrns
 
 	### SIGNALS ###
 	'optimize': 
@@ -49,9 +45,9 @@
 	'decode': 
 		{'type':'sinusoid','t_final':3.0,'dt':0.001,'dim':1,'omega':2},
 		#{'type':'constant','t_final':2.0,'dt':0.001,'dim':1,'mean':0.5},
-		#{'type':'equalpower','t_final':1.0,'dt':0.001,'dim':1,'mean':0.0,'std':1.0,'max_freq':5.0,'seed':None},
+		#{'type':'equalpower','t_final':10.0,'dt':0.001,'dim':1,'mean':0.0,'std':1.0,'max_freq':5.0,'seed':None},
 	'test':
 		{'type':'sinusoid','t_final':3.0,'dt':0.001,'dim':1,'omega':2},
 		#{'type':'constant','t_final':3.0,'dt':0.001,'dim':1,'mean':0.5},
-		#{'type':'equalpower','t_final':3.0,'dt':0.001,'dim':1,'mean':0.0,'std':1.0,'max_freq':1.0,'seed':111},
+		#{'type':'equalpower','t_final':3.0,'dt':0.001,'dim':1,'mean':0.0,'std':1.0,'max_freq':10.0,'seed':111},
 }

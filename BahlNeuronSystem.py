@@ -12,9 +12,10 @@ class BahlNeuron(nengo.neurons.NeuronType):
 	'''compartmental neuron from Bahl et al 2012'''
 
 	probeable=('spikes','voltage')
-	def __init__(self,P):
+	def __init__(self,P,my_P):
 		super(BahlNeuron,self).__init__()
 		self.P=P
+		self.my_P=my_P
 		if self.P['load_weights']==True: self.best_results_file=True
 		else: self.best_results_file=None
 
@@ -28,7 +29,8 @@ class BahlNeuron(nengo.neurons.NeuronType):
 		import os
 		def __init__(self,bio_idx):
 			# neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc')
-			neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc') #todo: hardcoded path
+			# neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc') #todo: hardcoded path
+			neuron.h.load_file('/home/pduggins/bionengo/NEURON_models/bahl2.hoc') #todo: hardcoded path
 			self.bio_idx=bio_idx
 			self.bias = None
 			self.synapses = {}
@@ -36,7 +38,8 @@ class BahlNeuron(nengo.neurons.NeuronType):
 		#creating cells in init() makes optimization run extra neurons;
 		#instead call this in ?builder_function?()
 		def add_cell(self): 
-			self.cell = neuron.h.Bahl()
+			# self.cell = neuron.h.Bahl()
+			self.cell = neuron.h.Bahl2()
 		def start_recording(self):
 			self.bias_current = neuron.h.IClamp(self.cell.soma(0.5))
 			self.bias_current.delay = 0
@@ -104,9 +107,10 @@ class SimBahlNeuron(Operator):
 		self.updates=[]
 		self.incs=[]
 		self.P=self.neurons.P
+		self.my_P=self.neurons.my_P
 		self.ens_atributes=None #stores nengo information about the ensemble
 		self.inputs={}
-		self.neurons.neurons=[self.neurons.create(i) for i in range(self.P['n_bio'])] #range(output.shape[0]) for full
+		self.neurons.neurons=[self.neurons.create(i) for i in range(self.my_P['n_neurons'])] #range(output.shape[0]) for full
 		self.best_results_file=self.neurons.best_results_file
 
 	def make_step(self,signals,dt,rng):
@@ -130,7 +134,7 @@ class SimBahlNeuron(Operator):
 			bioneuron.bias=np.load(self.best_results_file[bionrn]+'/bias.npz')['bias']
 			for inpt in self.inputs.iterkeys():
 				pre_neurons=self.inputs[inpt]['pre_neurons']
-				pre_synapses=self.P['n_syn']
+				pre_synapses=self.my_P['n_syn']
 				bioneuron.synapses[inpt]=np.empty((pre_neurons,pre_synapses),dtype=object)
 				# bioneuron.netcons[inpt]=np.empty((pre_neurons,pre_synapses),dtype=object)	
 				weights=np.load(self.best_results_file[bionrn]+'/'+inpt+'_weights.npz')['weights']
@@ -139,7 +143,7 @@ class SimBahlNeuron(Operator):
 					for syn in range(pre_synapses):	
 						section=bioneuron.cell.apical(locations[pre][syn])
 						weight=weights[pre][syn]
-						synapse=ExpSyn(section,weight,self.P['tau'])
+						synapse=ExpSyn(section,weight,self.my_P['tau'])
 						bioneuron.synapses[inpt][pre][syn]=synapse
 			bioneuron.start_recording()
 
@@ -231,8 +235,10 @@ def build_connection(model,conn):
 
 def post_build_func(model,network):
 	#this function get called in simulator.py after models are built but before signals are created
+	count_bioensembles=0
 	for op in model.operators:
 		if isinstance(op, SimBahlNeuron):
+			count_bioensembles+=1
 			# print op.ens_atributes['label']
 			# print 'Initializing cells'
 			op.init_cells()
@@ -244,6 +250,9 @@ def post_build_func(model,network):
 					# print 'Adding TransmitSpikes operator to model'
 					model.add_op(TransmitSpikes(
 						conn.pre_obj.label,model.sig[conn.pre]['out'],op,states=[model.time]))
-	neuron.h.dt = dt_neuron #fails if no bioensembles present in model
+	if count_bioensembles>0:
+		neuron.h.dt = dt_neuron #fails if no bioensembles present in model
+	else:
+		neuron.h.dt = 0.0001*1000
 	neuron.init()
 	print 'NEURON initialized, beginning simulation...'

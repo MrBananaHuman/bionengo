@@ -14,8 +14,9 @@ import seaborn as sns
 from nengo.utils.matplotlib import rasterplot
 
 class CustomSolver(nengo.solvers.Solver):
-	def __init__(self,P,ens_post,model,method):
+	def __init__(self,P,my_P,ens_post,model,method):
 		self.P=P
+		self.my_P=my_P
 		self.ens_post=ens_post
 		self.method=method
 		self.weights=False #decoders not weights
@@ -32,15 +33,15 @@ class CustomSolver(nengo.solvers.Solver):
 		elif isinstance(self.ens_post.neuron_type, BahlNeuron):
 			self.P['ens_post']=self.ens_post
 			P=copy.copy(self.P)
+			my_P=copy.copy(self.my_P)
 			P['ens_post']={}
 			P['ens_post']['inpts']=self.P['ens_post'].neuron_type.father_op.inputs
 			P['ens_post']['atrb']=self.P['ens_post'].neuron_type.father_op.ens_atributes
 			#don't optimize if filenames already exists
-			# if self.ens_post.neuron_type.best_results_file != None:
-			# 	#todo: restart a failed optimization run without freezing
-			# 	best_results_file, targets, activities = load_bioneuron_system(self.P)
-			# else:
-			best_results_file, targets, activities = optimize_bioneuron_system(self.P)
+			if self.ens_post.neuron_type.best_results_file != None and self.P['continue_optimization']==False:
+				best_results_file, targets, activities = load_bioneuron_system(self.P)
+			else:
+				best_results_file, targets, activities = optimize_bioneuron_system(self.P,my_P)
 			self.ens_post.neuron_type.father_op.best_results_file=best_results_file
 			if self.method == 'load':
 				#load activities/targets from the runs performed during optimization
@@ -78,8 +79,10 @@ class CustomSolver(nengo.solvers.Solver):
 class Bahl():
 	def __init__(self,P,bias):
 		# neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc')
-		neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc')
-		self.cell = neuron.h.Bahl()
+		# neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc')
+		neuron.h.load_file('/home/pduggins/bionengo/NEURON_models/bahl2.hoc') #todo: hardcoded path
+		# self.cell = neuron.h.Bahl()
+		self.cell = neuron.h.Bahl2()
 		self.bias = bias
 		self.bias_current = neuron.h.IClamp(self.cell.soma(0.5))
 		self.bias_current.delay = 0
@@ -87,17 +90,6 @@ class Bahl():
 		self.bias_current.amp = self.bias
 		self.synapses={}
 		self.netcons={}
-	def make_synapses(self,P,my_weights,my_locations):
-		for inpt in P['ens_post']['inpts'].iterkeys():
-			ens_pre_info=P['ens_post']['inpts'][inpt]
-			self.synapses[inpt]=np.empty((ens_pre_info['pre_neurons'],P['n_syn']),dtype=object)
-			# self.netcons[inpt]=np.empty((ens_pre_info['pre_neurons'],P['n_syn']),dtype=object)
-			for pre in range(ens_pre_info['pre_neurons']):
-				for syn in range(P['n_syn']):
-					section=self.cell.apical(my_locations[inpt][pre][syn])
-					weight=my_weights[inpt][pre][syn]
-					synapse=ExpSyn(section,weight,P['tau'])
-					self.synapses[inpt][pre][syn]=synapse	
 	def start_recording(self):
 		self.v_record = neuron.h.Vector()
 		self.v_record.record(self.cell.soma(0.5)._ref_v)
@@ -127,10 +119,6 @@ def make_pre_spikes(P):
 	p_stims={}
 	p_pres={}		
 	p_pres_spikes={}		
-	if P['decode']['type']=='sinusoid':
-		n_inputs=len(P['ens_post']['inpts'])
-		primes=sigz.primeno(n_inputs)
-		i=0
 	with nengo.Network() as decode_model:
 		ideal=nengo.Ensemble(
 				label=atrb['label'],
@@ -142,10 +130,7 @@ def make_pre_spikes(P):
 		p_ideal_spikes=nengo.Probe(ideal.neurons,'spikes')
 		for key in P['ens_post']['inpts'].iterkeys():
 			pre_atrb=P['ens_post']['inpts'][key]
-			P_signal=copy.copy(P['optimize'])
-			if P_signal['type']=='sinusoid':
-				P_signal['omega']=primes[i]
-				i+=1
+			P_signal=copy.copy(P['decode'])
 			signals[key]=make_signal(P_signal)
 			stims[key]=nengo.Node(lambda t, key=key: signals[key][:,np.floor(t/P['dt_nengo'])])
 			pres[key]=nengo.Ensemble(
@@ -193,7 +178,7 @@ def create_biopop(P,bahl_op):
 		bioneuron=Bahl(P,bias)
 		for inpt in bahl_op.inputs.iterkeys():
 			pre_neurons=bahl_op.inputs[inpt]['pre_neurons']
-			pre_synapses=bahl_op.P['n_syn']
+			pre_synapses=bahl_op.my_P['n_syn']
 			bioneuron.synapses[inpt]=np.empty((pre_neurons,pre_synapses),dtype=object)
 			# bioneuron.netcons[inpt]=np.empty((pre_neurons,pre_synapses),dtype=object)	
 			weights=np.load(bahl_op.best_results_file[bionrn]+'/'+inpt+'_weights.npz')['weights']
@@ -202,7 +187,7 @@ def create_biopop(P,bahl_op):
 				for syn in range(pre_synapses):	
 					section=bioneuron.cell.apical(locations[pre][syn])
 					weight=weights[pre][syn]
-					synapse=ExpSyn(section,weight,bahl_op.P['tau'])
+					synapse=ExpSyn(section,weight,bahl_op.my_P['tau'])
 					bioneuron.synapses[inpt][pre][syn]=synapse
 		bioneuron.start_recording()
 		biopop.append(bioneuron)
