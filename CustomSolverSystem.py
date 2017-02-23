@@ -78,11 +78,10 @@ class CustomSolver(nengo.solvers.Solver):
 
 class Bahl():
 	def __init__(self,P,bias):
-		# neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc')
-		# neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc')
-		neuron.h.load_file('/home/pduggins/bionengo/NEURON_models/bahl2.hoc') #todo: hardcoded path
-		# self.cell = neuron.h.Bahl()
-		self.cell = neuron.h.Bahl2()
+		neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc')
+		# neuron.h.load_file('/home/pduggins/bionengo/NEURON_models/bahl_few_connections.hoc') #todo: hardcoded path
+		self.cell = neuron.h.Bahl()
+		# self.cell = neuron.h.Bahl_few_connections()
 		self.bias = bias
 		self.bias_current = neuron.h.IClamp(self.cell.soma(0.5))
 		self.bias_current.delay = 0
@@ -132,7 +131,7 @@ def make_pre_spikes(P):
 			pre_atrb=P['ens_post']['inpts'][key]
 			P_signal=copy.copy(P['decode'])
 			signals[key]=make_signal(P_signal)
-			stims[key]=nengo.Node(lambda t, key=key: signals[key][:,np.floor(t/P['dt_nengo'])])
+			stims[key]=nengo.Node(lambda t, key=key: signals[key][:,int(t/P['dt_nengo'])])
 			pres[key]=nengo.Ensemble(
 					label=pre_atrb['pre_label'],
 					n_neurons=pre_atrb['pre_neurons'],
@@ -166,7 +165,7 @@ def make_pre_spikes(P):
 		all_signals.append(signal_in)
 		all_pre_spikes.append(spikes)
 	summed_signals=np.sum(all_signals,axis=0)
-	all_pre_spikes=np.array(all_pre_spikes)
+	# all_pre_spikes=np.array(all_pre_spikes)
 	ideal_spikes=decoder_test.data[p_ideal_spikes]
 	return summed_signals,all_pre_spikes,ideal_spikes
 
@@ -198,11 +197,11 @@ def	run_biopop_events(P,biopop,pre_spikes_list):
 	neuron.h.dt = P['dt_neuron']*1000
 	neuron.init()
 	inpts=[key for key in P['ens_post']['inpts'].iterkeys()]
-	for time in tqdm(range(pre_spikes_list.shape[1])): #for each simulated nengo timestep
+	for time in tqdm(range(len(pre_spikes_list[0]))): #for each simulated nengo timestep
 		t_neuron=time*P['dt_nengo']*1000
 		for bioneuron in biopop:
-			for i in range(pre_spikes_list.shape[0]):  #for each input connection
-				for pre in range(pre_spikes_list[i][time].shape[0]): #for each input neuron
+			for i in range(len(pre_spikes_list)):  #for each input connection
+				for pre in range(len(pre_spikes_list[i][time])): #for each input neuron
 					if pre_spikes_list[i][time][pre] > 0: #if input neuron spikes at time
 						bioneuron.event_step(t_neuron,inpts[i],pre)
 		neuron.run(t_neuron)

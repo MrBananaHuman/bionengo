@@ -112,7 +112,7 @@ def make_pre_and_ideal_spikes(P):
 				P_signal['omega']=primes[i]
 				i+=1
 			signals[key]=make_signal(P_signal)
-			stims[key]=nengo.Node(lambda t, key=key: signals[key][:,np.floor(t/P['dt_nengo'])])
+			stims[key]=nengo.Node(lambda t, key=key: signals[key][:,int(t/P['dt_nengo'])])
 			pres[key]=nengo.Ensemble(
 					label=pre_atrb['pre_label'],
 					n_neurons=pre_atrb['pre_neurons'],
@@ -223,7 +223,9 @@ class Bahl():
 	def __init__(self,P,bias):
 		# neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc')
 		neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc')
+		# neuron.h.load_file('/home/pduggins/bionengo/NEURON_models/bahl_few_connections.hoc') #todo: hardcoded path
 		self.cell = neuron.h.Bahl()
+		# self.cell = neuron.h.Bahl_few_connections()
 		self.bias = bias
 		self.bias_current = neuron.h.IClamp(self.cell.soma(0.5))
 		self.bias_current.delay = 0

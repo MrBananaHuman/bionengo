@@ -6,18 +6,20 @@ import copy
 import ipdb
 import json
 import os
-from optimize_bioneuron_system_onebyone import load_bioneuron_system, optimize_bioneuron_system
+
+'''NEURON model class ###################################################################'''
+'''################## ###################################################################'''
 
 class BahlNeuron(nengo.neurons.NeuronType):
 	'''compartmental neuron from Bahl et al 2012'''
 
 	probeable=('spikes','voltage')
-	def __init__(self,P,my_P):
+	def __init__(self,P,label):
 		super(BahlNeuron,self).__init__()
 		self.P=P
-		self.my_P=my_P
-		if self.P['load_weights']==True: self.best_results_file=True
-		else: self.best_results_file=None
+		self.label=label
+		if self.P['load_weights']==True: self.best_hyperparam_files=True
+		else: self.best_hyperparam_files=None
 
 	def create(self,bio_idx):
 		return self.Bahl(bio_idx)
@@ -28,17 +30,16 @@ class BahlNeuron(nengo.neurons.NeuronType):
 		from synapses import ExpSyn, Exp2Syn
 		import os
 		def __init__(self,bio_idx):
-			neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc') #todo: hardcoded path
-			# neuron.h.load_file('/home/pduggins/bionengo/NEURON_models/bahl_few_connections.hoc') #todo: hardcoded path
+			# neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc') #todo: hardcoded path
+			neuron.h.load_file('/home/pduggins/bionengo/NEURON_models/bahl.hoc') #todo: hardcoded path
+			# neuron.h.load_file('/home/pduggins/bionengo/NEURON_models/bahl2.hoc') #todo: hardcoded path
 			self.bio_idx=bio_idx
 			self.bias = None
 			self.synapses = {}
 			self.netcons = {}
-		#creating cells in init() makes optimization run extra neurons;
-		#instead call this in ?builder_function?()
 		def add_cell(self): 
 			self.cell = neuron.h.Bahl()
-			# self.cell = neuron.h.Bahl_few_connections()
+			# self.cell = neuron.h.Bahl2()
 		def start_recording(self):
 			self.bias_current = neuron.h.IClamp(self.cell.soma(0.5))
 			self.bias_current.delay = 0
@@ -76,22 +77,8 @@ class BahlNeuron(nengo.neurons.NeuronType):
 		voltage[:]=np.array(new_voltage)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-'''
-Builder #############################################################################3
-'''		
+'''Builder #############################################################################'''
+'''####### #############################################################################'''
 
 class SimBahlNeuron(Operator):
 	def __init__(self,neurons,output,voltage,states):
@@ -106,11 +93,11 @@ class SimBahlNeuron(Operator):
 		self.updates=[]
 		self.incs=[]
 		self.P=self.neurons.P
-		self.my_P=self.neurons.my_P
+		self.label=self.neurons.label
 		self.ens_atributes=None #stores nengo information about the ensemble
 		self.inputs={}
-		self.neurons.neurons=[self.neurons.create(i) for i in range(self.my_P['n_neurons'])] #range(output.shape[0]) for full
-		self.best_results_file=self.neurons.best_results_file
+		self.neurons.neurons=[self.neurons.create(i) for i in range(self.P[self.label]['n_neurons'])] #range(output.shape[0]) for full
+		self.best_hyperparam_files=self.neurons.best_hyperparam_files
 
 	def make_step(self,signals,dt,rng):
 		output=signals[self.output]
@@ -130,33 +117,20 @@ class SimBahlNeuron(Operator):
 		from synapses import ExpSyn
 		for bionrn in range(len(self.neurons.neurons)):
 			bioneuron=self.neurons.neurons[bionrn]
-			bioneuron.bias=np.load(self.best_results_file[bionrn]+'/bias.npz')['bias']
+			bioneuron.bias=np.load(self.best_hyperparam_files[bionrn]+'/bias.npz')['bias']
 			for inpt in self.inputs.iterkeys():
 				pre_neurons=self.inputs[inpt]['pre_neurons']
-				pre_synapses=self.my_P['n_syn']
+				pre_synapses=self.ens_atributes['n_syn']
 				bioneuron.synapses[inpt]=np.empty((pre_neurons,pre_synapses),dtype=object)
-				# bioneuron.netcons[inpt]=np.empty((pre_neurons,pre_synapses),dtype=object)	
-				weights=np.load(self.best_results_file[bionrn]+'/'+inpt+'_weights.npz')['weights']
-				locations=np.load(self.best_results_file[bionrn]+'/'+inpt+'_locations.npz')['locations']
+				weights=np.load(self.best_hyperparam_files[bionrn]+'/'+inpt+'_weights.npz')['weights']
+				locations=np.load(self.best_hyperparam_files[bionrn]+'/'+inpt+'_locations.npz')['locations']
 				for pre in range(pre_neurons):
 					for syn in range(pre_synapses):	
 						section=bioneuron.cell.apical(locations[pre][syn])
 						weight=weights[pre][syn]
-						synapse=ExpSyn(section,weight,self.my_P['tau'])
+						synapse=ExpSyn(section,weight,self.ens_atributes['tau'])
 						bioneuron.synapses[inpt][pre][syn]=synapse
 			bioneuron.start_recording()
-
-
-
-
-
-
-
-
-
-
-
-
 
 class TransmitSpikes(Operator):
 	def __init__(self,ens_pre_label,spikes,bahl_op,states):
@@ -212,8 +186,10 @@ def build_connection(model,conn):
 			bahl_op.ens_atributes['max_rate']=conn.post.max_rates.high
 			bahl_op.ens_atributes['radius']=conn.post.radius
 			bahl_op.ens_atributes['seed']=conn.post.seed
-		#if there's no saved information about this input connection,
-		#save the connection info and later optimize
+			bahl_op.ens_atributes['n_syn']=P[bahl_op.label]['n_syn']
+			bahl_op.ens_atributes['evals']=P[bahl_op.label]['evals']
+			bahl_op.ens_atributes['tau']=P[bahl_op.label]['tau']
+		#if there's no saved information about this input, save the connection info and later optimize
 		if conn.pre.label not in bahl_op.inputs:
 			bahl_op.inputs[conn.pre.label]={}
 			bahl_op.inputs[conn.pre.label]['pre_label']=conn.pre.label
@@ -221,15 +197,64 @@ def build_connection(model,conn):
 			bahl_op.inputs[conn.pre.label]['pre_dim']=conn.pre.dimensions
 			bahl_op.inputs[conn.pre.label]['pre_min_rate']=conn.pre.max_rates.low
 			bahl_op.inputs[conn.pre.label]['pre_max_rate']=conn.pre.max_rates.high
-			bahl_op.inputs[conn.pre.label]['pre_radius']=conn.pre.radius
-			bahl_op.inputs[conn.pre.label]['pre_seed']=conn.pre.seed
-			bahl_op.inputs[conn.pre.label]['pre_type']=str(conn.pre.neuron_type)
-			bahl_op.inputs[conn.pre.label]['transform']=conn.transform
-			bahl_op.inputs[conn.pre.label]['synapse']=conn.synapse
+			# bahl_op.inputs[conn.pre.label]['pre_radius']=conn.pre.radius
+			# bahl_op.inputs[conn.pre.label]['pre_seed']=conn.pre.seed
+			# bahl_op.inputs[conn.pre.label]['pre_type']=str(conn.pre.neuron_type)
+			# bahl_op.inputs[conn.pre.label]['transform']=conn.transform
+			# bahl_op.inputs[conn.pre.label]['synapse']=conn.synapse
 			#function?
 	else: #normal connection
 		return nengo.builder.connection.build_connection(model, conn)
 
+'''Helper Functions #############################################################################'''
+'''################ #############################################################################'''
+
+def pre_build_func(network,dt): #or take P instead of model
+	#this function get called in simulator.py after network is defined and operators are created
+	#but before decoders are calculated.
+	#Replaces all bioneurons in network with LIF neurons, runs the model with space-covering inputs,
+	#collects spikes into the bioneurons (pres) and spikes out of the LIF neurons (ideal)
+	bio_dict={}
+	opt_net=copy.copy(network)
+	for ens in opt_net.ensembles:
+		if not isinstance(ens.neuron_type,BahlNeuron): continue #only bioensembles selected
+		P=ens.neuron_type.P
+		bio_dict[ens.label]={}
+		with opt_net:
+			bio_dict[ens.label]['probe']=nengo.Probe(ens.neurons,'spikes') #probe output spikes
+		bio_dict[ens.label]['inputs']={}
+		for conn in opt_net.connections:
+			if conn.post == ens:
+				bio_dict[ens.label]['inputs'][conn.pre_obj.label]={}
+				with opt_net: 
+					bio_dict[ens.label]['inputs'][conn.pre_obj.label]['probe']=\
+							nengo.Probe(conn.pre_obj.neurons,'spikes')
+		with opt_net:
+			ens.neuron_type=nengo.LIF() #replace bioensemble with param-identical LIF ensemble
+	#rebuild network?
+	#define input signals and connect to inputs?
+	with nengo.Simulator(opt_net,dt=dt) as opt_sim:
+		opt_sim.run(P['optimize']['t_final'])
+	for bio in bio_dict.iterkeys():
+		try: 
+			os.makedirs(bio)
+			os.chdir(bio)
+		except OSError:
+			os.chdir(bio)
+		bio_dict[bio]['ideal_spikes']=opt_sim.data[bio_dict[bio]['probe']]
+		for inpt in bio_dict[bio]['inputs'].iterkeys():
+			bio_dict[bio]['inputs'][inpt]['pre_spikes']=\
+					opt_sim.data[bio_dict[bio]['inputs'][inpt]['probe']]
+			np.savez('spikes_from_%s_to_%s.npz'%(inpt,bio),spikes=\
+					bio_dict[bio]['inputs'][inpt]['pre_spikes'])
+		np.savez('spikes_ideal_%s.npz'%bio,spikes=bio_dict[bio]['ideal_spikes'])
+		os.chdir('..')
+	#replace bioensembles with BahlNeuron neuron_type
+	for ens in opt_net.ensembles:
+		if ens.label not in bio_dict: continue #only bioensembles selected
+		with opt_net:
+			ens.neuron_type=BahlNeuron(P,ens.label)
+	print 'Pre and ideal spikes generated...'
 
 
 def post_build_func(model,network):

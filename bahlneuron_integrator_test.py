@@ -27,7 +27,7 @@ def main():
 
 	with nengo.Network(label='test_model') as model:
 		'''NODES and ENSEMBLES'''
-		stim = nengo.Node(lambda t: raw_signal[:,np.floor(t/P['dt_nengo'])]) #all dim, index at t
+		stim = nengo.Node(lambda t: raw_signal[:,int(t/P['dt_nengo'])]) #all dim, index at t
 		pre=nengo.Ensemble(n_neurons=P['pre']['n_neurons'],dimensions=P['pre']['dim'],
 								seed=P['pre']['seed'],label='pre',
 								max_rates=nengo.dists.Uniform(P['pre']['min_rate'],P['pre']['max_rate']))

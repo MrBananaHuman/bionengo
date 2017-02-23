@@ -2,6 +2,42 @@ import string
 import random
 import signals
 import numpy as np
+import os
+import nengo
+
+def make_pre_ideal_spikes(P,network):
+	bio_dict={}
+	#opt_net=copy.copy(network)
+	for ens in opt_net.ensembles:
+		if not isinstance(ens.neuron_type,BahlNeuron): continue #only bioensembles selected
+		ens.neuron_type=nengo.LIF() #will this work?
+		bio_dict[ens.label]={}
+		with opt_net: bio_dict[ens.label]['probe']=nengo.Probe(ens,synapse=ens.synapse)
+		bio_dict[ens.label]['inputs']={}
+		for conn in opt_net.connections:
+			if isinstance(conn.post_obj,BahlNeuron):
+				bio_dict[ens.label]['inputs'][conn.pre_obj.label]={}
+				with opt_net: 
+					bio_dict[ens.label]['inputs'][conn.pre_obj.label]['probe']=\
+							nengo.Probe(conn.pre_obj.neurons,'spikes')
+	#rebuild network?
+	#define input signals and connect to inputs
+	with nengo.Simulator(opt_net,dt=P['dt_nengo']) as opt_sim:
+		opt_sim.run(P['optimize']['t_final'])
+	for bio in bio_dict.iterkeys():
+		try: 
+			os.makedirs(bio)
+			os.chdir(bio)
+		except OSError:
+			os.chdir(bio)
+		bio_dict[bio]['ideal_spikes']=opt_sim.data[bio_dict[bio]['probe']]
+		for inpt in bio_dict[bio]['inputs'].iterkeys():
+			bio_dict[bio]['inputs'][inpt]['pre_spikes']=\
+					opt_sim.data[bio_dict[bio]['inputs'][inpt]['probe']]
+			np.savez('spikes_from_%s_to_%s.npz'%(inpt,bio),spikes=\
+					bio_dict[bio]['inputs'][inpt]['pre_spikes'])
+		np.savez('spikes_ideal_%s.npz'%bio,spikes=bio_dict[bio]['ideal_spikes'])
+		os.chdir('..')
 
 def ch_dir():
 	#change directory for data and plot outputs
@@ -53,12 +89,12 @@ def weight_rescale(location):
 	scaled_weight=1.0/f_voltage_att(location)
 	return scaled_weight
 
-def load_signals_spikes(P):
-	signals_spikes_pres={}
-	for key in P['ens_post']['inpts'].iterkeys():
-		signals_spikes_pres[key]=np.load('signals_spikes_from_%s_to_%s.npz'%(key,P['ens_post']['atrb']['label']))
-	spikes_ideal=np.load('ideal_spikes_%s.npz'%P['ens_post']['atrb']['label'])['spikes_ideal']
-	return signals_spikes_pres,spikes_ideal
+def load_spikes(P):
+	all_spikes_pre={}
+	for key in P['inpts'].iterkeys():
+		all_spikes_pre[key]=np.load('spikes_from_%s_to_%s.npz'%(key,P['atrb']['label']))['spikes']
+	spikes_ideal=np.load('spikes_ideal_%s.npz'%P['atrb']['label'])['spikes']
+	return all_spikes_pre,spikes_ideal
 
 def filter_spikes(P,bioneuron,spikes_ideal):
 	lpf=nengo.Lowpass(P['kernel']['tau'])
@@ -80,6 +116,22 @@ def filter_spikes(P,bioneuron,spikes_ideal):
 def compute_loss(P,rates_bio,rates_ideal):
 	loss=np.sqrt(np.average((rates_bio-rates_ideal)**2))
 	return loss
+
+def export_data(P,weights,locations,bias,spikes_bio,spikes_ideal,rates_bio,rates_ideal):
+	try:
+		os.makedirs('eval_%s_bioneuron_%s'%(P['current_eval'],P['hyperopt']['bionrn']))
+		os.chdir('eval_%s_bioneuron_%s'%(P['current_eval'],P['hyperopt']['bionrn']))
+	except OSError:
+		os.chdir('eval_%s_bioneuron_%s'%(P['current_eval'],P['hyperopt']['bionrn']))
+	np.savez('bias.npz',bias=bias)
+	#spikes_ideal and rates_ideal are redundant (saved in pre_build_func()), but makes loading easier
+	np.savez('spikes_rates_bio_ideal.npz',
+				spikes_bio=spikes_bio,spikes_ideal=spikes_ideal,
+				rates_bio=rates_bio,rates_ideal=rates_ideal)
+	for inpt in P['inpts'].iterkeys():
+		np.savez('%s_weights.npz'%inpt,weights=weights[inpt])
+		np.savez('%s_locations.npz'%inpt,locations=locations[inpt])
+	os.chdir('..')
 
 def plot_spikes_rates(P,best_results_file,target_signal):
 	spikes_bio=[]
@@ -135,3 +187,19 @@ def plot_hyperopt_loss(P,losses):
 	ax1.set(xlabel='trial',ylabel='loss')
 	figure1.savefig('total_hyperopt_performance.png')
 	plt.close(figure1)
+
+def load_hyperparams(P_in):
+	P=copy.copy(P_in)
+	P['ens']={}
+	P['ens']['inpts']=P_in['ens_post'].neuron_type.father_op.inputs
+	P['ens']['atrb']=P_in['ens_post'].neuron_type.father_op.ens_atributes
+	print 'Loading connections into %s' %P['ens']['atrb']['label']
+	os.chdir(P['directory']+P['ens']['atrb']['label'])
+	rates_bio=[]
+	best_hyperparam_files=np.load('best_hyperparam_files.npz')['best_hyperparam_files']
+	for file in best_hyperparam_files:
+		spikes_rates_bio_ideal=np.load(file+'/spikes_rates_bio_ideal.npz')
+		rates_bio.append(spikes_rates_bio_ideal['rates_bio'])
+	rates_bio=np.array(rates_bio).T
+	target_signal=np.load('target_signal.npz')['target_signal']
+	return best_hyperparam_files,target_signal,rates_bio
