@@ -9,9 +9,6 @@ import os
 from bioneuron_train import train_hyperparams
 from synapses import ExpSyn, Exp2Syn
 from tqdm import *
-import matplotlib.pyplot as plt
-import seaborn as sns
-from nengo.utils.matplotlib import rasterplot
 from bioneuron_helper import ch_dir, make_signal, load_spikes, load_hyperparams,\
 		filter_spikes, compute_loss, plot_spikes_rates, plot_hyperopt_loss
 
@@ -46,7 +43,8 @@ class BioneuronSolver(nengo.solvers.Solver):
 				self.targets=targets
 				self.activities=activities
 				self.decoders=self.solver(self.activities,self.targets)[0]
-			#elif self.method == 'simulate':
+			elif self.method == 'simulate':
+				raise NotImplementedError
 				#todo
 			# print 'activities', self.activities
 			# print 'target', self.targets

@@ -4,6 +4,9 @@ import signals
 import numpy as np
 import os
 import nengo
+import matplotlib.pyplot as plt
+import seaborn as sns
+from nengo.utils.matplotlib import rasterplot
 
 def make_pre_ideal_spikes(P,network):
 	bio_dict={}
@@ -23,7 +26,7 @@ def make_pre_ideal_spikes(P,network):
 	#rebuild network?
 	#define input signals and connect to inputs
 	with nengo.Simulator(opt_net,dt=P['dt_nengo']) as opt_sim:
-		opt_sim.run(P['optimize']['t_final'])
+		opt_sim.run(P['train']['t_final'])
 	for bio in bio_dict.iterkeys():
 		try: 
 			os.makedirs(bio)
@@ -98,7 +101,7 @@ def load_spikes(P):
 
 def filter_spikes(P,bioneuron,spikes_ideal):
 	lpf=nengo.Lowpass(P['kernel']['tau'])
-	timesteps=np.arange(0,P['optimize']['t_final'],P['dt_nengo'])
+	timesteps=np.arange(0,P['train']['t_final'],P['dt_nengo'])
 	#convert spike times to a spike train for bioneuron spikes
 	spikes_bio=np.zeros_like(timesteps)
 	spikes_times_bio=np.array(bioneuron.spikes).ravel()
@@ -151,7 +154,7 @@ def plot_spikes_rates(P,best_results_file,target_signal):
 	loss=np.sqrt(np.average((rates_bio-rates_ideal)**2))
 	sns.set(context='poster')
 	figure1, (ax0,ax1,ax2) = plt.subplots(3, 1,sharex=True)
-	timesteps=np.arange(0,P['optimize']['t_final'],P['dt_nengo'])
+	timesteps=np.arange(0,P['train']['t_final'],P['dt_nengo'])
 	ax0.plot(timesteps,target_signal)
 	rasterplot(timesteps,spikes_ideal,ax=ax1,use_eventplot=True)
 	rasterplot(timesteps,spikes_bio,ax=ax2,use_eventplot=True)

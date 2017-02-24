@@ -13,7 +13,6 @@ import pickle
 import matplotlib.pyplot as plt
 import seaborn
 from synapses import ExpSyn
-from nengo.utils.matplotlib import rasterplot
 from pathos.multiprocessing import ProcessingPool as Pool
 from bioneuron_helper import ch_dir, make_signal, load_spikes, filter_spikes, compute_loss,\
 		export_data, plot_spikes_rates, plot_hyperopt_loss
@@ -173,9 +172,9 @@ def train_hyperparams(P):
 		losses.append(results[bionrn][2])
 	rates_bio=np.array(rates_bio).T
 	os.chdir(P['directory']+P['atrb']['label'])
-	target_signal=np.load('target_signal.npz')['target_signal']
+	target=np.load('output_ideal_%s.npz'%P['atrb']['label'])['values']
 	#plot the spikes and rates of the best run
-	plot_spikes_rates(P,best_hyperparam_files,target_signal)
+	plot_spikes_rates(P,best_hyperparam_files,target)
 	plot_hyperopt_loss(P,np.array(losses))
 	np.savez('best_hyperparam_files.npz',best_hyperparam_files=best_hyperparam_files)
-	return best_hyperparam_files,target_signal,rates_bio
+	return best_hyperparam_files,target,rates_bio
