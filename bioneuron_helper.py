@@ -4,6 +4,7 @@ import signals
 import numpy as np
 import os
 import nengo
+import copy
 import matplotlib.pyplot as plt
 import seaborn as sns
 from nengo.utils.matplotlib import rasterplot
@@ -73,7 +74,8 @@ def make_signal(P):
 		elif signal_type=='switch':
 			raw_signal.append(signals.switch(dt,t_final,P['max_freq'],))
 		elif signal_type=='equalpower':
-			if seed == None: seed=np.random.randint(99999999)
+			if P['seed'] == None: seed=np.random.randint(99999999)
+			else: seed=P['seed']
 			raw_signal.append(signals.equalpower(dt,t_final,P['max_freq'],mean=P['mean'],std=P['std'],seed=seed))
 		elif signal_type=='poisson_binary':
 			raw_signal.append(signals.poisson_binary(dt,t_final,mean_freq,P['max_freq'],low,high))
@@ -193,16 +195,13 @@ def plot_hyperopt_loss(P,losses):
 
 def load_hyperparams(P_in):
 	P=copy.copy(P_in)
-	P['ens']={}
-	P['ens']['inpts']=P_in['ens_post'].neuron_type.father_op.inputs
-	P['ens']['atrb']=P_in['ens_post'].neuron_type.father_op.ens_atributes
-	print 'Loading connections into %s' %P['ens']['atrb']['label']
-	os.chdir(P['directory']+P['ens']['atrb']['label'])
+	print 'Loading connections into %s' %P['atrb']['label']
+	os.chdir(P['directory']+P['atrb']['label'])
 	rates_bio=[]
 	best_hyperparam_files=np.load('best_hyperparam_files.npz')['best_hyperparam_files']
 	for file in best_hyperparam_files:
 		spikes_rates_bio_ideal=np.load(file+'/spikes_rates_bio_ideal.npz')
 		rates_bio.append(spikes_rates_bio_ideal['rates_bio'])
 	rates_bio=np.array(rates_bio).T
-	target_signal=np.load('target_signal.npz')['target_signal']
+	target_signal=np.load('output_ideal_%s.npz'%P['atrb']['label'])['values']
 	return best_hyperparam_files,target_signal,rates_bio

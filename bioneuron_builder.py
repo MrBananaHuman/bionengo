@@ -6,6 +6,7 @@ import copy
 import ipdb
 import json
 import os
+import gc
 
 '''NEURON model class ###################################################################'''
 '''################## ###################################################################'''
@@ -213,7 +214,6 @@ def pre_build_func(network,dt): #or take P instead of model
 	#called in simulator.py after network is defined and operators are created but before decoders are calculated.
 	bio_dict={}
 	lif_net=network.copy()
-	# dir_net=network.copy()
 	#Replaces all bioneurons in network with LIF neurons, runs the model with space-covering inputs,
 	#collects spikes into the bioneurons (pres) and spikes out of the LIF neurons (ideal)
 	for ens in lif_net.ensembles:
@@ -222,7 +222,6 @@ def pre_build_func(network,dt): #or take P instead of model
 		bio_dict[ens.label]={}
 		with lif_net:
 			bio_dict[ens.label]['probe_ideal_spikes']=nengo.Probe(ens.neurons,'spikes') #probe output spikes
-			bio_dict[ens.label]['probe_ideal_output']=nengo.Probe(ens,synapse=P['kernel']['tau']) #probe ideal output
 		bio_dict[ens.label]['inputs']={}
 		for conn in lif_net.connections:
 			if conn.post == ens:
@@ -231,20 +230,25 @@ def pre_build_func(network,dt): #or take P instead of model
 					bio_dict[ens.label]['inputs'][conn.pre_obj.label]['probe_pre_spikes']=\
 							nengo.Probe(conn.pre_obj.neurons,'spikes')
 		with lif_net: ens.neuron_type=nengo.LIF() #replace bioensemble with param-identical LIF ensemble
-	#replace all neurons in dir_net with direct neurons to simulate target values (analytic solution)
-	# for ens in dir_net.ensembles:
-	# 	with dir_net:
-	# 		if ens.label in bio_dict:
-	# 			bio_dict[ens.label]['probe_ideal_output']=nengo.Probe(ens,synapse=P['kernel']['tau']) #probe ideal output
-	# 		ens.neuron_type=nengo.LIF() #nengo.Direct()
-			# ens_dir=nengo.Ensemble(n_neurons=1,neuron_type=nengo.Direct(),dimensions=ens.dimensions,label=ens.label) #replace bioensemble with direct neurons
-			# ens=ens_dir
 
-	#run the modified networks for a training period, collecting spike inputs, spike outputs, and ideal outputs
+	target_net=network.copy()
+	#replace all neurons in target_net with direct neurons to simulate target values (analytic solution)
+	del target_net.probes[:]
+	with target_net:
+		for ens in target_net.ensembles:
+			if P['target_method'] == 'LIF':
+				ens.neuron_type=nengo.LIF()	
+			elif P['target_method'] == 'LIFrate':
+				ens.neuron_type=nengo.LIFRate()	
+			elif P['target_method'] == 'direct':
+				ens.neuron_type=nengo.Direct()	
+			if ens.label in bio_dict:
+				bio_dict[ens.label]['probe_ideal_output']=nengo.Probe(ens,synapse=P['kernel']['tau']) #probe ideal output
+
 	with nengo.Simulator(lif_net,dt=dt) as lif_sim:
 		lif_sim.run(P['train']['t_final'])
-	# with nengo.Simulator(dir_net,dt=dt) as dir_sim:
-	# 	dir_sim.run(P['train']['t_final'])
+	with nengo.Simulator(target_net,dt=dt) as target_sim:
+		target_sim.run(P['train']['t_final'])
 	#save probe data in .npz files, which are loaded during training and decoder calculation
 	for bio in bio_dict.iterkeys():
 		try: 
@@ -253,7 +257,7 @@ def pre_build_func(network,dt): #or take P instead of model
 		except OSError:
 			os.chdir(bio)
 		bio_dict[bio]['ideal_spikes']=lif_sim.data[bio_dict[bio]['probe_ideal_spikes']]
-		bio_dict[bio]['ideal_output']=lif_sim.data[bio_dict[bio]['probe_ideal_output']] #dir_sim
+		bio_dict[bio]['ideal_output']=target_sim.data[bio_dict[bio]['probe_ideal_output']]
 		for inpt in bio_dict[bio]['inputs'].iterkeys():
 			bio_dict[bio]['inputs'][inpt]['pre_spikes']=\
 					lif_sim.data[bio_dict[bio]['inputs'][inpt]['probe_pre_spikes']]
