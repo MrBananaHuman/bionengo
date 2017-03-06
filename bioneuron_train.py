@@ -14,20 +14,21 @@ import matplotlib.pyplot as plt
 import seaborn
 from synapses import ExpSyn
 from pathos.multiprocessing import ProcessingPool as Pool
-from bioneuron_helper import ch_dir, make_signal, load_spikes, filter_spikes, compute_loss,\
-		export_data, plot_spikes_rates, plot_hyperopt_loss
+from bioneuron_helper import ch_dir, make_signal, load_spikes, load_values, \
+		filter_spikes, compute_loss, export_data, plot_spikes_rates_voltage_train, plot_hyperopt_loss
 
 class Bahl():
-	def __init__(self,P,bias):
+	def __init__(self,P):
 		neuron.h.load_file('/home/pduggins/bionengo/NEURON_models/bahl.hoc')
 		self.cell = neuron.h.Bahl()
+		self.synapses={}
+		self.netcons={}
+	def add_bias(self,bias):
 		self.bias = bias
 		self.bias_current = neuron.h.IClamp(self.cell.soma(0.5))
 		self.bias_current.delay = 0
 		self.bias_current.dur = 1e9  # TODO; limits simulation time
 		self.bias_current.amp = self.bias
-		self.synapses={}
-		self.netcons={}
 	def make_synapses(self,P,my_weights,my_locations):
 		for inpt in P['inpts'].iterkeys():
 			self.synapses[inpt]=np.empty((P['inpts'][inpt]['pre_neurons'],P['atrb']['n_syn']),dtype=object)
@@ -56,7 +57,8 @@ def make_hyperopt_space(P_in,bionrn,rng):
 	P=copy.copy(P_in)
 	hyperparams={}
 	hyperparams['bionrn']=bionrn
-	hyperparams['bias']=hyperopt.hp.uniform('b_%s'%bionrn,P['bias_min'],P['bias_max'])
+	if P['optimize_bias']==True: hyperparams['bias']=hyperopt.hp.uniform('b_%s'%bionrn,-P['b_0'],P['b_0'])
+	else: hyperparams['bias']=None
 	for inpt in P['inpts'].iterkeys():
 		hyperparams[inpt]={}
 		for pre in range(P['inpts'][inpt]['pre_neurons']):
@@ -72,6 +74,28 @@ def make_hyperopt_space(P_in,bionrn,rng):
 	P['hyperopt']=hyperparams
 	return P
 
+def make_hyperopt_space_decomposed_weights(P_in,bionrn,rng):
+	P=copy.copy(P_in)
+	hyperparams={}
+	hyperparams['bionrn']=bionrn
+	if P['optimize_bias']==True: hyperparams['bias']=hyperopt.hp.uniform('b_%s'%bionrn,P['bias_min'],P['bias_max'])
+	else: hyperparams['bias']=None
+	for inpt in P['inpts'].iterkeys():
+		decoders=np.load('decoders_from_%s_to_%s.npz'%(inpt,P['atrb']['label']))['decoders']
+		hyperparams[inpt]={}
+		for pre in range(P['inpts'][inpt]['pre_neurons']):
+			hyperparams[inpt][pre]={}
+			hyperparams[inpt][pre]['d']=decoders[pre][0]
+			for syn in range(P['atrb']['n_syn']):
+				hyperparams[inpt][pre][syn]={}
+				hyperparams[inpt][pre][syn]['l']=np.round(rng.uniform(0.0,1.0),decimals=2)
+				hyperparams[inpt][pre][syn]['e']=[]
+				for dim in range(decoders.shape[1]):
+					hyperparams[inpt][pre][syn]['e'].append(
+						hyperopt.hp.uniform('e_%s_%s_%s_%s_%s'%(bionrn,inpt,pre,syn,dim),-P['e_0'],P['e_0']))
+	P['hyperopt']=hyperparams
+	return P			
+
 def load_hyperopt_space(P):
 	weights={}
 	locations={}
@@ -82,29 +106,38 @@ def load_hyperopt_space(P):
 		for pre in range(P['inpts'][inpt]['pre_neurons']):
 			for syn in range(P['atrb']['n_syn']):
 				locations[inpt][pre][syn]=P['hyperopt'][inpt][pre][syn]['l']
-				weights[inpt][pre][syn]=P['hyperopt'][inpt][pre][syn]['w']
+				if P['decompose_weights']== True: #w_ij=d_i dot e_ij
+					weights[inpt][pre][syn]=np.dot(
+							P['hyperopt'][inpt][pre]['d'],
+							np.array(P['hyperopt'][inpt][pre][syn]['e']))
+				else:
+					weights[inpt][pre][syn]=P['hyperopt'][inpt][pre][syn]['w']
 	return weights,locations,bias
 
 def create_bioneuron(P,weights,locations,bias):
-	bioneuron=Bahl(P,bias)
+	bioneuron=Bahl(P)
+	if P['optimize_bias']==True: bioneuron.add_bias(bias)
 	bioneuron.make_synapses(P,weights,locations)
 	bioneuron.start_recording()
 	return bioneuron	
 
 def run_bioneuron_event_based(P,bioneuron,all_spikes_pre):
 	neuron.h.dt = P['dt_neuron']*1000
-	neuron.init()
 	inpts=[key for key in all_spikes_pre.iterkeys()]
 	pres=[all_spikes_pre[inpt].shape[1] for inpt in inpts]
 	all_input_spikes=[all_spikes_pre[inpt] for inpt in inpts]
-	for time in range(all_spikes_pre[inpts[0]].shape[0]): #for each timestep
+	t_final=all_spikes_pre[inpts[0]].shape[0] #number of timesteps total
+	neuron.init()
+	neuron.run(0.1*t_final*P['dt_nengo']*1000) #run out transients (no inputs to model, lets voltages stabilize)
+	bioneuron.start_recording() #reset recording attributes in neuron
+	neuron.init()
+	for time in range(t_final): #for each timestep
 		t_neuron=time*P['dt_nengo']*1000
 		for i in range(len(inpts)):  #for each input connection
 			for pre in range(pres[i]): #for each input neuron
 				if all_input_spikes[i][time][pre] > 0: #if input neuron spikes at time
 					bioneuron.event_step(t_neuron,inpts[i],pre)
-		neuron.run(time*P['dt_nengo']*1000)
-
+		neuron.run(t_neuron)
 
 '''###############################################################################################################'''
 '''###############################################################################################################'''
@@ -116,9 +149,12 @@ def simulate(P):
 	weights,locations,bias=load_hyperopt_space(P)
 	bioneuron=create_bioneuron(P,weights,locations,bias)
 	run_bioneuron_event_based(P,bioneuron,all_spikes_pre)
-	spikes_bio,spikes_ideal,rates_bio,rates_ideal=filter_spikes(P,bioneuron,spikes_ideal)
-	loss=compute_loss(P,rates_bio,rates_ideal)
-	export_data(P,weights,locations,bias,spikes_bio,spikes_ideal,rates_bio,rates_ideal)
+	spikes_bio,spikes_ideal,rates_bio,rates_ideal,voltages=filter_spikes(P,bioneuron,spikes_ideal)
+	loss=compute_loss(P,rates_bio,rates_ideal,voltages)
+	export_data(P,weights,locations,bias,spikes_bio,spikes_ideal,rates_bio,rates_ideal,voltages,loss)
+	# print P['atrb']['label'], 'neuron', P['hyperopt']['bionrn'], 'loss', loss
+	# for key in weights.iterkeys():
+	# 	print key, np.average(weights[key]), np.average(locations[key])
 	return {'loss': loss, 'eval':P['current_eval'], 'status': hyperopt.STATUS_OK}
 
 def run_hyperopt(P):
@@ -134,11 +170,11 @@ def run_hyperopt(P):
 		P['current_eval']=t
 		my_seed=P['hyperopt_seed']+P['atrb']['seed']+P['hyperopt']['bionrn']*(t+1)
 		best=hyperopt.fmin(simulate,
-			rstate=np.random.RandomState(seed=my_seed),
-			space=P,
-			algo=hyperopt.tpe.suggest,
-			max_evals=(t+1),
-			trials=trials)
+				rstate=np.random.RandomState(seed=my_seed),
+				space=P,
+				algo=hyperopt.tpe.suggest,
+				max_evals=(t+1),
+				trials=trials)
 		print 'Connections into %s, bioneuron %s, hyperopt %s%%'\
 			%(P['atrb']['label'],P['hyperopt']['bionrn'],100.0*(t+1)/P['atrb']['evals'])
 	#find best run's directory location
@@ -159,22 +195,25 @@ def train_hyperparams(P):
 	pool = Pool(nodes=P['n_nodes'])
 	rng=np.random.RandomState(seed=P['hyperopt_seed']+P['atrb']['seed'])
 	for bionrn in range(P['atrb']['neurons']):
-		P_hyperopt=make_hyperopt_space(P,bionrn,rng)
+		if P['decompose_weights']==True: P_hyperopt=make_hyperopt_space_decomposed_weights(P,bionrn,rng)
+		else: P_hyperopt=make_hyperopt_space(P,bionrn,rng)
 		# run_hyperopt(P_hyperopt)
 		P_list.append(P_hyperopt)
 	results=pool.map(run_hyperopt,P_list)
+	# pool.terminate()
 	#create and save a list of the eval_number associated with the minimum loss for each bioneuron
-	best_hyperparam_files, rates_bio, losses = [], [], []
+	best_hyperparam_files, rates_bio, best_losses, all_losses = [], [], [], []
 	for bionrn in range(len(results)):
 		best_hyperparam_files.append(P['directory']+P['atrb']['label']+'/eval_%s_bioneuron_%s'%(results[bionrn][1],bionrn))
 		spikes_rates_bio_ideal=np.load(best_hyperparam_files[-1]+'/spikes_rates_bio_ideal.npz')
+		best_losses.append(np.load(best_hyperparam_files[-1]+'/loss.npz')['loss'])
 		rates_bio.append(spikes_rates_bio_ideal['rates_bio'])
-		losses.append(results[bionrn][2])
+		all_losses.append(results[bionrn][2])
 	rates_bio=np.array(rates_bio).T
 	os.chdir(P['directory']+P['atrb']['label'])
 	target=np.load('output_ideal_%s.npz'%P['atrb']['label'])['values']
 	#plot the spikes and rates of the best run
-	plot_spikes_rates(P,best_hyperparam_files,target)
-	plot_hyperopt_loss(P,np.array(losses))
+	plot_spikes_rates_voltage_train(P,best_hyperparam_files,target,np.array(best_losses))
+	plot_hyperopt_loss(P,np.array(all_losses))
 	np.savez('best_hyperparam_files.npz',best_hyperparam_files=best_hyperparam_files)
 	return best_hyperparam_files,target,rates_bio

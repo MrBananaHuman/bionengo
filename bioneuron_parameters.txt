@@ -2,13 +2,13 @@
 	### NENGO ###
 	'dt_nengo':0.001, #change in optimize too
 	'dt_neuron':0.0001,
-	'pre':{'n_neurons':50,'n_syn':5,'dim':1,'seed':33,'min_rate':100,'max_rate':120,'radius':1,'tau':0.05,'evals':1},
-	'pre2':{'n_neurons':50,'n_syn':5,'dim':1,'seed':33,'min_rate':100,'max_rate':120,'radius':1,'tau':0.05,'evals':1},
-	'pre3':{'n_neurons':50,'n_syn':5,'dim':1,'seed':33,'min_rate':100,'max_rate':120,'radius':1,'tau':0.05,'evals':1},
+	'pre':{'n_neurons':100,'n_syn':5,'dim':1,'seed':33,'min_rate':100,'max_rate':120,'radius':1,'tau':0.05,'evals':1},
+	'pre2':{'n_neurons':100,'n_syn':5,'dim':1,'seed':33,'min_rate':100,'max_rate':120,'radius':1,'tau':0.05,'evals':1},
+	'pre3':{'n_neurons':100,'n_syn':5,'dim':1,'seed':33,'min_rate':100,'max_rate':120,'radius':1,'tau':0.05,'evals':1},
 	'ens_bio':{'n_neurons':100,'n_syn':5,'dim':1,'seed':66,'min_rate':100,'max_rate':120,'radius':1,'tau':0.05,'evals':100},
-	'ens_bio2':{'n_neurons':100,'n_syn':5,'dim':1,'seed':99,'min_rate':100,'max_rate':120,'radius':1,'tau':0.05,'evals':100},
-	'ens_bio3':{'n_neurons':100,'n_syn':5,'dim':1,'seed':99,'min_rate':100,'max_rate':120,'radius':1,'tau':0.05,'evals':100},
-	'ens_bio4':{'n_neurons':100,'n_syn':5,'dim':1,'seed':99,'min_rate':100,'max_rate':120,'radius':1,'tau':0.05,'evals':100},
+	'ens_bio2':{'n_neurons':30,'n_syn':5,'dim':1,'seed':99,'min_rate':100,'max_rate':120,'radius':1,'tau':0.05,'evals':2},
+	'ens_bio3':{'n_neurons':30,'n_syn':5,'dim':1,'seed':99,'min_rate':100,'max_rate':120,'radius':1,'tau':0.05,'evals':30},
+	'ens_bio4':{'n_neurons':30,'n_syn':5,'dim':1,'seed':99,'min_rate':100,'max_rate':120,'radius':1,'tau':0.05,'evals':30},
 
 	### SPIKE SMOOTHING ###
 	'kernel': #for smoothing spikes to calculate loss and activities
@@ -18,15 +18,19 @@
 
 	### OPTIMIZATION ###
 	'hyperopt_seed':369,
-	'w_0':0.001, #0.001
-	'bias_min':-1.0, #-1.0
-	'bias_max':1.0, #1.0
+	'w_0':0.00001, #0.001
+	'e_0':10.0, #10.0
+	'b_0':1.0, #1.0
 	'synapse_type':'ExpSyn',
 	'n_seg': 5,
 	'n_nodes':10,
-	'optimize_locations':False,
 	'spikes_train':'ideal', #use spiking output of pre_bio vs. pre_lif to train next ens
 	'decoder_train':'load', #calculate decoders: _system 'load', 'simulate'; _old 'bio' vs 'ideal'
+	'target_method':'direct', #use decoded 'LIF' output ('LIF'(spike) vs 'LIFRate') vs output of 'direct' ensembles as target signal for bioensemble decoders
+	'optimize_bias': False,
+	'optimize_locations':False,
+	'decompose_weights':False,
+	'complex_loss': True,
 
 	### NETWORK ###
 	'transform_pre_to_ens':0.05,
@@ -39,31 +43,32 @@
 
 	### LOAD ###
 	'continue_optimization':False, 
-	#'directory':'/home/pduggins/bionengo/data/28LD8DJRD/', #400 evals 50 nrns T=0.1,0.9 tau=0.05
-	#'directory':'/home/pduggins/bionengo/data/3G2RJLW2A/', #300 evals 100 nrns T=0.1,1.0 equalpower
-	#'directory':'/home/pduggins/bionengo/data/D3XERYTD4/', #500 evals 100 nrns T=0.1,1.0 
-	#'directory':'/home/pduggins/bionengo/data/1EATMG1L4/', #200-600 evals 100 nrns T=0.05,1.0 
-	#'directory':'/home/pduggins/bionengo/data/8BMWCE73X/', #200 evals 50 nrns T=0.25,0.75  
-	#'directory':'/home/pduggins/bionengo/data/RGEQUGQ5M/', #200 evals OS9XT4J8D 400 evals 50 nrns
+	#'directory':'/home/pduggins/bionengo/data/HCEU7TI79/', #400(1000),10 evals 30,2 nrns T=0.05,1.0 tau=0.05 equalpower, no bias, loss trick2, no_decompose
+	#'directory':'/home/pduggins/bionengo/data/EB4LP20XV/', #100,10 evals 30,2 nrns T=0.05,1.0 tau=0.05 equalpower, no bias, loss trick, decompose
+	#'directory':'/home/pduggins/bionengo/data/NHO0L44N8/', #100,10 evals 100,30 nrns T=0.05,1.0 tau=0.05 equalpower, no bias, loss trick
+	#'directory':'/home/pduggins/bionengo/data/XIOX6E2NR/', #400,100 evals 100,30 nrns T=0.05,1.0 tau=0.05 equalpower, no bias
+	#'directory':'/home/pduggins/bionengo/data/LMPMAYNCI/', #400,100 evals 100,30 nrns T=0.05,1.0 tau=0.05 equalpower
+	#'directory':'/home/pduggins/bionengo/data/3Z30M3RRO/', #400,100 evals 100,30 nrns T=0.05,1.0 tau=0.05 equalpower
+	#'directory':'/home/pduggins/bionengo/data/M09KPRTYO/', #400,100 evals 100,30 nrns T=0.05,1.0 tau=0.05 sinusoid
 
 	### SIGNALS ###
 	'train': 
-		{'type':'sinusoid','t_final':3.0,'dt':0.001,'dim':1,'omega':2},
-		#{'type':'equalpower','t_final':10.0,'dt':0.001,'dim':1,'mean':0.0,'std':1.0,'max_freq':5.0,'seed':None},
+		#{'type':'sinusoid','t_final':3.0,'dt':0.001,'dim':1,'omega':2},
+		{'type':'equalpower','t_final':3.0,'dt':0.001,'dim':1,'mean':0.0,'std':1.0,'max_freq':5.0,'seed':None},
 	'decode': 
 		{'type':'sinusoid','t_final':3.0,'dt':0.001,'dim':1,'omega':2},
 		#{'type':'constant','t_final':2.0,'dt':0.001,'dim':1,'mean':0.5},
-		#{'type':'equalpower','t_final':10.0,'dt':0.001,'dim':1,'mean':0.0,'std':1.0,'max_freq':5.0,'seed':None},
+		#{'type':'equalpower','t_final':3.0,'dt':0.001,'dim':1,'mean':0.0,'std':1.0,'max_freq':5.0,'seed':None},
 	'test':
-		{'type':'sinusoid','t_final':3.0,'dt':0.001,'dim':1,'omega':2},
+		#{'type':'sinusoid','t_final':3.0,'dt':0.001,'dim':1,'omega':2},
 		#{'type':'constant','t_final':3.0,'dt':0.001,'dim':1,'mean':0.5},
-		#{'type':'equalpower','t_final':3.0,'dt':0.001,'dim':1,'mean':0.0,'std':1.0,'max_freq':10.0,'seed':111},
+		{'type':'equalpower','t_final':3.0,'dt':0.001,'dim':1,'mean':0.0,'std':1.0,'max_freq':5.0,'seed':111},
 	'test2':
-		{'type':'sinusoid','t_final':3.0,'dt':0.001,'dim':1,'omega':2},
+		#{'type':'sinusoid','t_final':3.0,'dt':0.001,'dim':1,'omega':2},
 		#{'type':'constant','t_final':3.0,'dt':0.001,'dim':1,'mean':0.5},
-		#{'type':'equalpower','t_final':3.0,'dt':0.001,'dim':1,'mean':0.0,'std':1.0,'max_freq':10.0,'seed':111},
+		{'type':'equalpower','t_final':10.0,'dt':0.001,'dim':1,'mean':0.0,'std':1.0,'max_freq':5.0,'seed':111},
 	'test3':
-		{'type':'sinusoid','t_final':3.0,'dt':0.001,'dim':1,'omega':2},
+		#{'type':'sinusoid','t_final':3.0,'dt':0.001,'dim':1,'omega':2},
 		#{'type':'constant','t_final':3.0,'dt':0.001,'dim':1,'mean':0.5},
-		#{'type':'equalpower','t_final':3.0,'dt':0.001,'dim':1,'mean':0.0,'std':1.0,'max_freq':10.0,'seed':111},
+		{'type':'equalpower','t_final':10.0,'dt':0.001,'dim':1,'mean':0.0,'std':1.0,'max_freq':5.0,'seed':111},
 }

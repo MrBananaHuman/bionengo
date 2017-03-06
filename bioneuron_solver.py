@@ -9,8 +9,7 @@ import os
 from bioneuron_train import train_hyperparams
 from synapses import ExpSyn, Exp2Syn
 from tqdm import *
-from bioneuron_helper import ch_dir, make_signal, load_spikes, load_hyperparams,\
-		filter_spikes, compute_loss, plot_spikes_rates, plot_hyperopt_loss
+from bioneuron_helper import load_hyperparams
 
 class BioneuronSolver(nengo.solvers.Solver):
 	def __init__(self,P,ens,method):

@@ -8,40 +8,7 @@ import copy
 import matplotlib.pyplot as plt
 import seaborn as sns
 from nengo.utils.matplotlib import rasterplot
-
-def make_pre_ideal_spikes(P,network):
-	bio_dict={}
-	#opt_net=copy.copy(network)
-	for ens in opt_net.ensembles:
-		if not isinstance(ens.neuron_type,BahlNeuron): continue #only bioensembles selected
-		ens.neuron_type=nengo.LIF() #will this work?
-		bio_dict[ens.label]={}
-		with opt_net: bio_dict[ens.label]['probe']=nengo.Probe(ens,synapse=ens.synapse)
-		bio_dict[ens.label]['inputs']={}
-		for conn in opt_net.connections:
-			if isinstance(conn.post_obj,BahlNeuron):
-				bio_dict[ens.label]['inputs'][conn.pre_obj.label]={}
-				with opt_net: 
-					bio_dict[ens.label]['inputs'][conn.pre_obj.label]['probe']=\
-							nengo.Probe(conn.pre_obj.neurons,'spikes')
-	#rebuild network?
-	#define input signals and connect to inputs
-	with nengo.Simulator(opt_net,dt=P['dt_nengo']) as opt_sim:
-		opt_sim.run(P['train']['t_final'])
-	for bio in bio_dict.iterkeys():
-		try: 
-			os.makedirs(bio)
-			os.chdir(bio)
-		except OSError:
-			os.chdir(bio)
-		bio_dict[bio]['ideal_spikes']=opt_sim.data[bio_dict[bio]['probe']]
-		for inpt in bio_dict[bio]['inputs'].iterkeys():
-			bio_dict[bio]['inputs'][inpt]['pre_spikes']=\
-					opt_sim.data[bio_dict[bio]['inputs'][inpt]['probe']]
-			np.savez('spikes_from_%s_to_%s.npz'%(inpt,bio),spikes=\
-					bio_dict[bio]['inputs'][inpt]['pre_spikes'])
-		np.savez('spikes_ideal_%s.npz'%bio,spikes=bio_dict[bio]['ideal_spikes'])
-		os.chdir('..')
+import ipdb
 
 def ch_dir():
 	#change directory for data and plot outputs
@@ -101,6 +68,14 @@ def load_spikes(P):
 	spikes_ideal=np.load('spikes_ideal_%s.npz'%P['atrb']['label'])['spikes']
 	return all_spikes_pre,spikes_ideal
 
+def load_values(P):
+	#loads decoded outputs of all pre ensembles
+	all_values_pre={}
+	for key in P['inpts'].iterkeys():
+		all_values_pre[key]=np.load('output_from_%s_to_%s.npz'%(key,P['atrb']['label']))['values']
+	spikes_ideal=np.load('spikes_ideal_%s.npz'%P['atrb']['label'])['spikes']
+	return all_values_pre,spikes_ideal
+
 def filter_spikes(P,bioneuron,spikes_ideal):
 	lpf=nengo.Lowpass(P['kernel']['tau'])
 	timesteps=np.arange(0,P['train']['t_final'],P['dt_nengo'])
@@ -116,55 +91,76 @@ def filter_spikes(P,bioneuron,spikes_ideal):
 	spikes_ideal=spikes_ideal
 	rates_bio=lpf.filt(spikes_bio,dt=P['dt_nengo'])
 	rates_ideal=lpf.filt(spikes_ideal,dt=P['dt_nengo'])
-	return spikes_bio,spikes_ideal,rates_bio,rates_ideal
+	voltages=np.array(bioneuron.v_record).ravel()
+	return spikes_bio,spikes_ideal,rates_bio,rates_ideal,voltages
 
-def compute_loss(P,rates_bio,rates_ideal):
-	loss=np.sqrt(np.average((rates_bio-rates_ideal)**2))
+def compute_loss(P,rates_bio,rates_ideal,voltages):
+	rmse=np.sqrt(np.average((rates_bio-rates_ideal)**2))
+	if P['complex_loss']==True:
+		t_total=len(voltages)
+		t_saturated=len(np.where((-40.0<voltages) & (voltages<-20.0))[0]) #when neurons burst initially then saturate, they settle around -40<V<-20
+		L_saturated=np.exp(10*t_saturated/t_total) #time spend in saturated regime exponentially increases loss (max e^10)
+		t_overactive=len(np.where((rates_bio>1.0) & (rates_ideal<1.0))[0]) #comparison to 1.0 rather than 0 ignores tails of filtered spikes
+		L_overactive=t_overactive/10.0 #a single wrong spike is about 125ms, so divide by 10 to get 12.5 loss per wrong spike
+		t_underactive=len(np.where((rates_ideal>1.0) & (rates_bio<1.0))[0])
+		L_underactive=t_underactive/10.0
+		loss=rmse+L_saturated+L_overactive+L_underactive
+	else:
+		loss=rmse
 	return loss
 
-def export_data(P,weights,locations,bias,spikes_bio,spikes_ideal,rates_bio,rates_ideal):
+def export_data(P,weights,locations,bias,spikes_bio,spikes_ideal,rates_bio,rates_ideal,voltages,loss):
 	try:
 		os.makedirs('eval_%s_bioneuron_%s'%(P['current_eval'],P['hyperopt']['bionrn']))
 		os.chdir('eval_%s_bioneuron_%s'%(P['current_eval'],P['hyperopt']['bionrn']))
 	except OSError:
 		os.chdir('eval_%s_bioneuron_%s'%(P['current_eval'],P['hyperopt']['bionrn']))
 	np.savez('bias.npz',bias=bias)
+	np.savez('loss.npz',loss=loss)
 	#spikes_ideal and rates_ideal are redundant (saved in pre_build_func()), but makes loading easier
 	np.savez('spikes_rates_bio_ideal.npz',
 				spikes_bio=spikes_bio,spikes_ideal=spikes_ideal,
-				rates_bio=rates_bio,rates_ideal=rates_ideal)
+				rates_bio=rates_bio,rates_ideal=rates_ideal,voltages=voltages)
 	for inpt in P['inpts'].iterkeys():
 		np.savez('%s_weights.npz'%inpt,weights=weights[inpt])
 		np.savez('%s_locations.npz'%inpt,locations=locations[inpt])
 	os.chdir('..')
 
-def plot_spikes_rates(P,best_results_file,target_signal):
+def plot_spikes_rates_voltage_train(P,best_results_file,target_signal,losses):
 	spikes_bio=[]
 	spikes_ideal=[]
 	rates_bio=[]
 	rates_ideal=[]
+	voltages=[]
 	for file in best_results_file:
 		spikes_rates_bio_ideal=np.load(file+'/spikes_rates_bio_ideal.npz')
 		spikes_bio.append(spikes_rates_bio_ideal['spikes_bio'])
 		spikes_ideal.append(spikes_rates_bio_ideal['spikes_ideal'])
 		rates_bio.append(spikes_rates_bio_ideal['rates_bio'])
 		rates_ideal.append(spikes_rates_bio_ideal['rates_ideal'])
+		voltages.append(spikes_rates_bio_ideal['voltages'])
 	spikes_bio=np.array(spikes_bio).T
 	spikes_ideal=np.array(spikes_ideal).T
 	rates_bio=np.array(rates_bio).T
 	rates_ideal=np.array(rates_ideal).T
-	loss=np.sqrt(np.average((rates_bio-rates_ideal)**2))
+	voltages=np.array(voltages).T
+	rmse=np.sqrt(np.average((rates_bio-rates_ideal)**2))
 	sns.set(context='poster')
 	figure1, (ax0,ax1,ax2) = plt.subplots(3, 1,sharex=True)
 	timesteps=np.arange(0,P['train']['t_final'],P['dt_nengo'])
 	ax0.plot(timesteps,target_signal)
 	rasterplot(timesteps,spikes_ideal,ax=ax1,use_eventplot=True)
 	rasterplot(timesteps,spikes_bio,ax=ax2,use_eventplot=True)
-	ax0.set(ylabel='input signal \n(weighted sum)',title='total rmse (rate)=%.5f'%loss)
+	ax0.set(ylabel='input signal \n(weighted sum)',title='total rmse (rate)=%.5f'%rmse)
 	ax1.set(ylabel='ideal spikes')
 	ax2.set(ylabel='bio spikes')
 	figure1.savefig('spikes_bio_vs_ideal.png')
 	plt.close()
+	try:
+		os.makedirs('bioneuron_plots')
+		os.chdir('bioneuron_plots')
+	except:
+		os.chdir('bioneuron_plots')
 	for nrn in range(rates_bio.shape[1]):
 		figure,ax=plt.subplots(1,1)
 		bio_rates_plot=ax.plot(timesteps,rates_bio[:,nrn][:len(timesteps)],linestyle='-')
@@ -172,10 +168,17 @@ def plot_spikes_rates(P,best_results_file,target_signal):
 			color=bio_rates_plot[0].get_color())
 		ax.plot(0,0,color='k',linestyle='-',label='bioneuron')
 		ax.plot(0,0,color='k',linestyle='--',label='LIF')
+		loss=losses[nrn]
 		rmse=np.sqrt(np.average((rates_bio[:,nrn][:len(timesteps)]-rates_ideal[:,nrn][:len(timesteps)])**2))
-		ax.set(xlabel='time (s)',ylabel='firing rate (Hz)',title='rmse=%.5f'%rmse)
+		ax.set(xlabel='time (s)',ylabel='firing rate (Hz)',title='rmse=%.5f, loss=%.5f'%(rmse,loss))
 		figure.savefig('bio_vs_ideal_rates_neuron_%s'%nrn)
 		plt.close(figure)
+		figure2,ax2=plt.subplots(1,1)
+		ax2.plot(voltages[:,nrn])
+		ax2.set(xlabel='time (ms)',ylabel='Voltage (mV)')
+		figure2.savefig('bioneuron_%s_voltages_train.png'%nrn)
+		plt.close(figure)
+	os.chdir('..')
 
 def plot_hyperopt_loss(P,losses):
 	import pandas as pd

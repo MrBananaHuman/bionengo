@@ -2,7 +2,6 @@ from collections import namedtuple
 import neuron
 
 class ExpSyn():
-
     def __init__(self, sec, weight, tau, e_exc=0.0, e_inh=-80.0):
         self.type = 'ExpSyn'
         self.tau = tau
@@ -17,7 +16,6 @@ class ExpSyn():
         self.spike_in.weight[0]=abs(self.weight)
 
 class Exp2Syn():
-
     def __init__(self, sec, weight, tau_rise=0.0001, tau_fall=0.01, e_exc=0.0, e_inh=-80.0):
         self.type = 'Exp2Syn'
         self.tau_rise = tau_rise

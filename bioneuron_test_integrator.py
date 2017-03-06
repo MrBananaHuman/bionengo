@@ -48,7 +48,7 @@ def main():
 								seed=P['ens_bio2']['seed'],radius=P['ens_bio2']['radius'],
 								max_rates=nengo.dists.Uniform(P['ens_bio2']['min_rate'],P['ens_bio2']['max_rate']))
 		ens_lif2=nengo.Ensemble(n_neurons=P['ens_bio2']['n_neurons'],dimensions=P['ens_bio2']['dim'],
-								neuron_type=nengo.LIF(),label='ens_lif2',										
+								neuron_type=nengo.LIF(),label='ens_lif2',
 								seed=P['ens_bio2']['seed'],radius=P['ens_bio2']['radius'],
 								max_rates=nengo.dists.Uniform(P['ens_bio2']['min_rate'],P['ens_bio2']['max_rate']))
 		ens_dir2=nengo.Ensemble(n_neurons=1,dimensions=P['ens_bio2']['dim'],
@@ -107,12 +107,22 @@ def main():
 		probe_lif2=nengo.Probe(ens_lif2,synapse=P['kernel']['tau'],solver=solver_ens_lif2)
 		probe_dir2=nengo.Probe(ens_dir2,synapse=P['kernel']['tau'])
 
+		# for c in model.connections:
+		# 	print c
+
 	with nengo.Simulator(model,
 						pre_build_func=pre_build_func,
 						post_build_func=post_build_func,
 						dt=P['dt_nengo']) as sim:
 		sim.run(P['test']['t_final'])
 	
+	# for conn in model.connections:
+	# 	print conn
+	# 	try:
+	# 		print sim.data[conn].weights.T, '<- weight'
+	# 	except:
+	# 		print 'unknown connection:'
+			
 	sns.set(context='poster')
 	os.chdir(P['directory'])
 	figure1, (ax1,ax2,ax3,ax4) = plt.subplots(4,1,sharex=True)
@@ -166,6 +176,30 @@ def main():
 	rasterplot(sim.trange(),sim.data[probe_lif_spikes2],ax=ax4,use_eventplot=True)
 	ax4.set(ylabel='lif2',yticks=([]))
 	figure2.savefig('bioneuron_vs_LIF_activity.png')
+
+	try:
+		os.makedirs('bioneuron_plots')
+		os.chdir('bioneuron_plots')
+	except:
+		os.chdir('bioneuron_plots')
+	figure4,ax1=plt.subplots(1,1)
+	for nrn in range(len(ens_bio.neuron_type.father_op.neurons.neurons)):
+		neuron=ens_bio.neuron_type.father_op.neurons.neurons[nrn]
+		figure,ax=plt.subplots(1,1)
+		ax.plot(np.array(neuron.v_record))
+		ax.set(xlabel='time (ms)', ylabel='Voltage (mV)')
+		figure.savefig('bioneuron_%s_voltages_test.png'%nrn)
+		plt.close(figure)
+		figure2,ax2=plt.subplots(1,1)
+		bio_rates_plot=ax2.plot(sim.trange(),bio_rates[:,nrn],linestyle='-')
+		ideal_rates_plot=ax2.plot(sim.trange(),lif_rates[:,nrn],linestyle='--',
+			color=bio_rates_plot[0].get_color())
+		ax2.plot(0,0,color='k',linestyle='-',label='bioneuron')
+		ax2.plot(0,0,color='k',linestyle='--',label='LIF')
+		rmse=np.sqrt(np.average((bio_rates[:,nrn]-lif_rates[:,nrn])**2))
+		ax2.set(xlabel='time (s)',ylabel='firing rate (Hz)',title='rmse=%.5f'%rmse)
+		figure2.savefig('bio_vs_ideal_rates_neuron_%s'%nrn)
+		plt.close(figure2)
 
 if __name__=='__main__':
 	main()
