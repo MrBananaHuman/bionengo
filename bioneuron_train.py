@@ -14,8 +14,9 @@ import matplotlib.pyplot as plt
 import seaborn
 from synapses import ExpSyn
 from pathos.multiprocessing import ProcessingPool as Pool
-from bioneuron_helper import ch_dir, make_signal, load_spikes, load_values, \
-		filter_spikes, compute_loss, export_data, plot_spikes_rates_voltage_train, plot_hyperopt_loss
+from bioneuron_helper import ch_dir, make_signal, load_spikes, load_values, filter_spikes,\
+		filter_spikes_2, compute_loss, export_data, plot_spikes_rates_voltage_train,\
+		plot_hyperopt_loss, delete_extra_hyperparam_files
 
 class Bahl():
 	def __init__(self,P):
@@ -128,16 +129,18 @@ def run_bioneuron_event_based(P,bioneuron,all_spikes_pre):
 	all_input_spikes=[all_spikes_pre[inpt] for inpt in inpts]
 	t_final=all_spikes_pre[inpts[0]].shape[0] #number of timesteps total
 	neuron.init()
-	neuron.run(0.1*t_final*P['dt_nengo']*1000) #run out transients (no inputs to model, lets voltages stabilize)
-	bioneuron.start_recording() #reset recording attributes in neuron
-	neuron.init()
-	for time in range(t_final): #for each timestep
+	# neuron.run(0.1*t_final*P['dt_nengo']*1000) #run out transients (no inputs to model, lets voltages stabilize)
+	# bioneuron.start_recording() #reset recording attributes in neuron
+	# neuron.init()
+	# for time in range(t_final): #for each timestep
+	for time in np.arange(1,t_final): #for each timestep
 		t_neuron=time*P['dt_nengo']*1000
+		# print time, t_neuron
+		neuron.run(t_neuron)
 		for i in range(len(inpts)):  #for each input connection
 			for pre in range(pres[i]): #for each input neuron
 				if all_input_spikes[i][time][pre] > 0: #if input neuron spikes at time
 					bioneuron.event_step(t_neuron,inpts[i],pre)
-		neuron.run(t_neuron)
 
 '''###############################################################################################################'''
 '''###############################################################################################################'''
@@ -149,7 +152,8 @@ def simulate(P):
 	weights,locations,bias=load_hyperopt_space(P)
 	bioneuron=create_bioneuron(P,weights,locations,bias)
 	run_bioneuron_event_based(P,bioneuron,all_spikes_pre)
-	spikes_bio,spikes_ideal,rates_bio,rates_ideal,voltages=filter_spikes(P,bioneuron,spikes_ideal)
+	spikes_bio,spikes_ideal,rates_bio,rates_ideal,voltages=filter_spikes_2(P,bioneuron,spikes_ideal)
+	# spikes_bio2,spikes_ideal2,rates_bio2,rates_ideal2,voltages2=filter_spikes_2(P,bioneuron,spikes_ideal)
 	loss=compute_loss(P,rates_bio,rates_ideal,voltages)
 	export_data(P,weights,locations,bias,spikes_bio,spikes_ideal,rates_bio,rates_ideal,voltages,loss)
 	# print P['atrb']['label'], 'neuron', P['hyperopt']['bionrn'], 'loss', loss
@@ -177,13 +181,15 @@ def run_hyperopt(P):
 				trials=trials)
 		print 'Connections into %s, bioneuron %s, hyperopt %s%%'\
 			%(P['atrb']['label'],P['hyperopt']['bionrn'],100.0*(t+1)/P['atrb']['evals'])
+		#save trials object for checkpoints / continued training later
+		if t % int(P['atrb']['evals']/3) == 0:
+			pickle.dump(trials,open('bioneuron_%s_hyperopt_trials.p'%P['hyperopt']['bionrn'],'wb'))
 	#find best run's directory location
 	losses=[t['result']['loss'] for t in trials]
 	ids=[t['result']['eval'] for t in trials]
 	idx=np.argmin(losses)
 	loss=np.min(losses)
 	result=str(ids[idx])
-	#save trials object for continued training later
 	pickle.dump(trials,open('bioneuron_%s_hyperopt_trials.p'%P['hyperopt']['bionrn'],'wb'))
 	#returns eval number with minimum loss for this bioneuron
 	return [P['hyperopt']['bionrn'],int(result),losses]
@@ -212,6 +218,8 @@ def train_hyperparams(P):
 	rates_bio=np.array(rates_bio).T
 	os.chdir(P['directory']+P['atrb']['label'])
 	target=np.load('output_ideal_%s.npz'%P['atrb']['label'])['values']
+	#delete files not in best_hyperparam_files
+	delete_extra_hyperparam_files(P,best_hyperparam_files)
 	#plot the spikes and rates of the best run
 	plot_spikes_rates_voltage_train(P,best_hyperparam_files,target,np.array(best_losses))
 	plot_hyperopt_loss(P,np.array(all_losses))

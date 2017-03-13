@@ -54,6 +54,12 @@ def main():
 		ens_dir2=nengo.Ensemble(n_neurons=1,dimensions=P['ens_bio2']['dim'],
 								neuron_type=nengo.Direct(),label='ens_dir2')
 
+		'''SOLVERS'''
+		solver_ens_bio=BioneuronSolver(P,ens_bio,method=P['decoder_train'])
+		solver_ens_lif=nengo.solvers.LstsqL2()
+		solver_ens_bio2=BioneuronSolver(P,ens_bio2,method=P['decoder_train'])
+		solver_ens_lif2=nengo.solvers.LstsqL2()
+
 		'''CONNECTIONS'''																
 		nengo.Connection(stim,pre,synapse=None)
 		nengo.Connection(pre,ens_bio,
@@ -65,8 +71,7 @@ def main():
 		nengo.Connection(stim,ens_dir,
 							synapse=P['ens_bio']['tau'],
 							transform=P['transform_pre_to_ens'])
-		solver_ens_bio=BioneuronSolver(P,ens_bio,method=P['decoder_train'])
-		solver_ens_lif=nengo.solvers.LstsqL2()
+
 		nengo.Connection(ens_bio,ens_bio,
 							solver=solver_ens_bio,
 							synapse=P['ens_bio']['tau'],
@@ -78,6 +83,7 @@ def main():
 		nengo.Connection(ens_dir,ens_dir,
 							synapse=P['ens_bio']['tau'],
 							transform=P['transform_ens_to_ens'])
+
 		nengo.Connection(ens_bio,ens_bio2,
 							synapse=P['ens_bio']['tau'],
 							solver=solver_ens_bio,
@@ -89,13 +95,13 @@ def main():
 		nengo.Connection(ens_dir,ens_dir2,
 							synapse=P['ens_bio']['tau'],
 							transform=P['transform_ens_to_ens2'])
-		solver_ens_bio2=BioneuronSolver(P,ens_bio2,method=P['decoder_train'])
-		solver_ens_lif2=nengo.solvers.LstsqL2()
+
 
 
 		'''PROBES'''
 		probe_stim=nengo.Probe(stim,synapse=None)
 		probe_pre=nengo.Probe(pre,synapse=P['kernel']['tau'])
+		probe_pre_spikes=nengo.Probe(pre.neurons,'spikes')
 		probe_bio_spikes=nengo.Probe(ens_bio.neurons,'spikes')
 		probe_lif_spikes=nengo.Probe(ens_lif.neurons,'spikes')
 		probe_bio=nengo.Probe(ens_bio,synapse=P['kernel']['tau'],solver=solver_ens_bio)
@@ -107,19 +113,17 @@ def main():
 		probe_lif2=nengo.Probe(ens_lif2,synapse=P['kernel']['tau'],solver=solver_ens_lif2)
 		probe_dir2=nengo.Probe(ens_dir2,synapse=P['kernel']['tau'])
 
-		# for c in model.connections:
-		# 	print c
-
 	with nengo.Simulator(model,
 						pre_build_func=pre_build_func,
 						post_build_func=post_build_func,
 						dt=P['dt_nengo']) as sim:
 		sim.run(P['test']['t_final'])
 	
+	# print 'decoders at test time'
 	# for conn in model.connections:
 	# 	print conn
 	# 	try:
-	# 		print sim.data[conn].weights.T, '<- weight'
+	# 		print sim.data[conn].weights.T
 	# 	except:
 	# 		print 'unknown connection:'
 			
@@ -200,6 +204,8 @@ def main():
 		ax2.set(xlabel='time (s)',ylabel='firing rate (Hz)',title='rmse=%.5f'%rmse)
 		figure2.savefig('bio_vs_ideal_rates_neuron_%s'%nrn)
 		plt.close(figure2)
+
+	# ipdb.set_trace()
 
 if __name__=='__main__':
 	main()

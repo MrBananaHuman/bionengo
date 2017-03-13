@@ -86,6 +86,22 @@ def main():
 		ens_dir4=nengo.Ensemble(n_neurons=1,dimensions=P['ens_bio4']['dim'],
 								neuron_type=nengo.Direct(),label='ens_dir4')
 
+		ens_lif5=nengo.Ensemble(n_neurons=P['ens_bio5']['n_neurons'],dimensions=P['ens_bio5']['dim'],
+								neuron_type=nengo.LIF(),label='ens_bio5',										
+								seed=P['ens_bio5']['seed'],radius=P['ens_bio5']['radius'],
+								max_rates=nengo.dists.Uniform(P['ens_bio5']['min_rate'],P['ens_bio5']['max_rate']))
+		ens_dir5=nengo.Ensemble(n_neurons=1,dimensions=P['ens_bio5']['dim'],
+								neuron_type=nengo.Direct(),label='ens_bio5')
+
+		'''SOLVERS'''
+		solver_ens_bio=BioneuronSolver(P,ens_bio,method=P['decoder_train'])
+		solver_ens_lif=nengo.solvers.LstsqL2()
+		solver_ens_bio2=BioneuronSolver(P,ens_bio2,method=P['decoder_train'])
+		solver_ens_lif2=nengo.solvers.LstsqL2()
+		solver_ens_bio3=BioneuronSolver(P,ens_bio3,method=P['decoder_train'])
+		solver_ens_lif3=nengo.solvers.LstsqL2()
+		solver_ens_bio4=BioneuronSolver(P,ens_bio4,method=P['decoder_train'])
+		solver_ens_lif4=nengo.solvers.LstsqL2()
 
 		'''CONNECTIONS'''																
 		nengo.Connection(stim,pre,synapse=None)
@@ -119,8 +135,6 @@ def main():
 		nengo.Connection(stim3,ens_dir3,
 							synapse=P['ens_bio3']['tau'],
 							transform=P['transform_pre3_to_ens3'])
-		solver_ens_bio=BioneuronSolver(P,ens_bio,method=P['decoder_train'])
-		solver_ens_lif=nengo.solvers.LstsqL2()
 
 		nengo.Connection(ens_bio,ens_bio2,
 							synapse=P['ens_bio']['tau'],
@@ -133,8 +147,6 @@ def main():
 		nengo.Connection(ens_dir,ens_dir2,
 							synapse=P['ens_bio']['tau'],
 							transform=P['transform_ens_to_ens2'])
-		solver_ens_bio2=BioneuronSolver(P,ens_bio2,method=P['decoder_train'])
-		solver_ens_lif2=nengo.solvers.LstsqL2()
 
 		nengo.Connection(ens_bio2,ens_bio3,
 							synapse=P['ens_bio2']['tau'],
@@ -147,8 +159,18 @@ def main():
 		nengo.Connection(ens_dir2,ens_dir3,
 							synapse=P['ens_bio2']['tau'],
 							transform=P['transform_ens2_to_ens3'])
-		solver_ens_bio3=BioneuronSolver(P,ens_bio3,method=P['decoder_train'])
-		solver_ens_lif3=nengo.solvers.LstsqL2()
+
+		nengo.Connection(ens_bio2,ens_bio4,
+							synapse=P['ens_bio3']['tau'],
+							solver=solver_ens_bio3,
+							transform=P['transform_ens2_to_ens4'])
+		nengo.Connection(ens_lif2,ens_lif4,
+							synapse=P['ens_bio3']['tau'],
+							solver=solver_ens_lif3,
+							transform=P['transform_ens2_to_ens4'])
+		nengo.Connection(ens_dir2,ens_dir4,
+							synapse=P['ens_bio3']['tau'],
+							transform=P['transform_ens2_to_ens4'])
 
 		nengo.Connection(ens_bio3,ens_bio4,
 							synapse=P['ens_bio3']['tau'],
@@ -161,9 +183,20 @@ def main():
 		nengo.Connection(ens_dir3,ens_dir4,
 							synapse=P['ens_bio3']['tau'],
 							transform=P['transform_ens3_to_ens4'])
-		solver_ens_bio4=BioneuronSolver(P,ens_bio4,method=P['decoder_train'])
-		solver_ens_lif4=nengo.solvers.LstsqL2()
 
+		nengo.Connection(ens_bio4,ens_lif5,
+							synapse=P['ens_bio4']['tau'],
+							solver=solver_ens_bio4,
+							transform=P['transform_ens4_to_ens5']
+						)
+		nengo.Connection(ens_lif4,ens_lif5,
+							synapse=P['ens_bio4']['tau'],
+							solver=solver_ens_lif4,
+							transform=P['transform_ens4_to_ens5']
+						)
+		nengo.Connection(ens_dir4,ens_dir5,
+							synapse=P['ens_bio4']['tau'],
+							transform=2*P['transform_ens4_to_ens5'])
 
 		'''PROBES'''
 		probe_stim=nengo.Probe(stim,synapse=None)
@@ -192,6 +225,8 @@ def main():
 		probe_bio4=nengo.Probe(ens_bio4,synapse=P['kernel']['tau'],solver=solver_ens_bio4)
 		probe_lif4=nengo.Probe(ens_lif4,synapse=P['kernel']['tau'],solver=solver_ens_lif4)
 		probe_dir4=nengo.Probe(ens_dir4,synapse=P['kernel']['tau'])
+		probe_lif5=nengo.Probe(ens_lif5,synapse=P['kernel']['tau'])
+		probe_dir5=nengo.Probe(ens_dir5,synapse=P['kernel']['tau'])
 
 	with nengo.Simulator(model,
 						pre_build_func=pre_build_func,
@@ -199,9 +234,17 @@ def main():
 						dt=P['dt_nengo']) as sim:
 		sim.run(P['test']['t_final'])
 	
+	# print 'decoders at test time'
+	# for conn in model.connections:
+	# 	print conn
+	# 	try:
+	# 		print sim.data[conn].weights.T
+	# 	except:
+	# 		print 'unknown connection:'
+
 	sns.set(context='poster')
 	os.chdir(P['directory'])
-	figure1, (ax1,ax2,ax3,ax4,ax5,ax6) = plt.subplots(6,1,sharex=True)
+	figure1, (ax1,ax2,ax3,ax4,ax5,ax6,ax7) = plt.subplots(7,1,sharex=True)
 	ax1.plot(sim.trange(),sim.data[probe_stim],label='stim')
 	ax1.plot(sim.trange(),sim.data[probe_stim2],label='stim2')
 	ax1.plot(sim.trange(),sim.data[probe_stim3],label='stim3')
@@ -242,6 +285,11 @@ def main():
 	ax6.plot(sim.trange(),sim.data[probe_dir4],label='direct')
 	ax6.set(ylabel='ens_4 $\hat{x}(t)$')#,ylim=((ymin,ymax)))
 	legend6=ax6.legend(prop={'size':8})
+	rmse_lif5=np.sqrt(np.average((sim.data[probe_dir5]-sim.data[probe_lif5])**2))
+	ax7.plot(sim.trange(),sim.data[probe_lif5],label='lif, rmse=%.5f'%rmse_lif5)
+	ax7.plot(sim.trange(),sim.data[probe_dir5],label='direct')
+	ax7.set(ylabel='ens_4 $\hat{x}(t)$')#,ylim=((ymin,ymax)))
+	legend7=ax7.legend(prop={'size':8})
 	figure1.savefig('bioneuron_vs_LIF_decode.png')
 
 

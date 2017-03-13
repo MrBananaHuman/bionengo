@@ -6,10 +6,8 @@ import copy
 import ipdb
 import json
 import os
-from bioneuron_train import train_hyperparams
 from synapses import ExpSyn, Exp2Syn
 from tqdm import *
-from bioneuron_helper import load_hyperparams
 
 class BioneuronSolver(nengo.solvers.Solver):
 	def __init__(self,P,ens,method):
@@ -28,26 +26,20 @@ class BioneuronSolver(nengo.solvers.Solver):
 		if self.decoders != None:
 			return self.decoders, dict()
 		elif isinstance(self.ens.neuron_type, BahlNeuron):
-			self.P['inpts']=self.ens.neuron_type.father_op.inputs
-			self.P['atrb']=self.ens.neuron_type.father_op.ens_atributes
-			#don't train if filenames already exists
-			if self.ens.neuron_type.best_hyperparam_files != None and self.P['continue_optimization']==False:
-				best_hyperparam_files, targets, activities = load_hyperparams(self.P)
-			else:
-				best_hyperparam_files, targets, activities = train_hyperparams(self.P)
-			self.ens.neuron_type.father_op.best_hyperparam_files=best_hyperparam_files
 			if self.method == 'load':
 				#load activities/targets from the runs performed during optimization
-				print 'loading target signal and bioneuron activities for %s' %self.P['atrb']['label']
-				self.targets=targets
-				self.activities=activities
-				self.decoders=self.solver(self.activities,self.targets)[0]
+				print 'loading target signal and bioneuron activities for %s' %self.ens.neuron_type.atrb['label']
+				self.targets=self.ens.neuron_type.father_op.targets
+				self.activities=self.ens.neuron_type.father_op.activities
+				min_len=np.min([len(self.targets), len(self.activities)])
+				# ipdb.set_trace()
+				self.decoders=self.solver(self.activities[:min_len,:],self.targets)[0]
+				self.ens.neuron_type.father_op.decoders=self.decoders
 			elif self.method == 'simulate':
 				raise NotImplementedError
 				#todo
-			# print 'activities', self.activities
-			# print 'target', self.targets
-			# print 'decoders', self.decoders
+			# self.decoders=np.ones(self.decoders.shape)
+			# print 'decoders from bioneuron_solver, ens', self.ens, self.decoders
 			return self.decoders, dict()
 		else:
 			return nengo.solvers.LstsqL2()(A,Y,rng=rng,E=E)

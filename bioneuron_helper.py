@@ -83,7 +83,8 @@ def filter_spikes(P,bioneuron,spikes_ideal):
 	spikes_bio=np.zeros_like(timesteps)
 	spikes_times_bio=np.array(bioneuron.spikes).ravel()
 	st=spikes_times_bio/P['dt_nengo']/1000
-	st_int=np.round(st,decimals=1).astype(int) #this leads to slight discrepancies with nengo spike trains
+	st_int=np.round(st,decimals=0).astype(int) #this leads to slight discrepancies with nengo spike trains
+	# st_int=np.round(st,decimals=1).astype(int) #this leads to slight discrepancies with nengo spike trains
 	for idx in st_int:
 		if idx >= len(spikes_bio): break
 		spikes_bio[idx]=1.0/P['dt_nengo']
@@ -93,6 +94,28 @@ def filter_spikes(P,bioneuron,spikes_ideal):
 	rates_ideal=lpf.filt(spikes_ideal,dt=P['dt_nengo'])
 	voltages=np.array(bioneuron.v_record).ravel()
 	return spikes_bio,spikes_ideal,rates_bio,rates_ideal,voltages
+
+def filter_spikes_2(P,bioneuron,spikes_ideal):
+	#make as similar to the make_step method in bioneuron_builder as possible
+	lpf=nengo.Lowpass(P['kernel']['tau'])
+	timesteps=np.arange(0,P['train']['t_final'],P['dt_nengo'])
+	#convert spike times to a spike train for bioneuron spikes
+	spikes_bio=[]
+	spikes_times_bio=np.array(bioneuron.spikes)
+	for t in timesteps:
+		spikes_current=len(np.where(spikes_times_bio<1000*t)[0])
+		spikes_last=np.count_nonzero(spikes_bio)
+		count=spikes_current-spikes_last
+		spikes_bio.append(1.0*count/P['dt_nengo'])
+		# print spikes_current, spikes_last
+	# ipdb.set_trace()
+	spikes_bio=np.array(spikes_bio)
+	spikes_ideal=spikes_ideal
+	rates_bio=lpf.filt(spikes_bio,dt=P['dt_nengo'])
+	rates_ideal=lpf.filt(spikes_ideal,dt=P['dt_nengo'])
+	voltages=np.array(bioneuron.v_record).ravel()
+	return spikes_bio,spikes_ideal,rates_bio,rates_ideal,voltages	
+
 
 def compute_loss(P,rates_bio,rates_ideal,voltages):
 	rmse=np.sqrt(np.average((rates_bio-rates_ideal)**2))
@@ -104,7 +127,7 @@ def compute_loss(P,rates_bio,rates_ideal,voltages):
 		L_overactive=t_overactive/10.0 #a single wrong spike is about 125ms, so divide by 10 to get 12.5 loss per wrong spike
 		t_underactive=len(np.where((rates_ideal>1.0) & (rates_bio<1.0))[0])
 		L_underactive=t_underactive/10.0
-		loss=rmse+L_saturated+L_overactive+L_underactive
+		loss=rmse+L_saturated#+L_overactive+L_underactive
 	else:
 		loss=rmse
 	return loss
@@ -125,6 +148,14 @@ def export_data(P,weights,locations,bias,spikes_bio,spikes_ideal,rates_bio,rates
 		np.savez('%s_weights.npz'%inpt,weights=weights[inpt])
 		np.savez('%s_locations.npz'%inpt,locations=locations[inpt])
 	os.chdir('..')
+
+def delete_extra_hyperparam_files(P,best_hyperparam_files):
+	from os import listdir
+	from os.path import isdir, join
+	import shutil
+	onlydirs = [join(P['directory']+P['atrb']['label'],f) for f in listdir(P['directory']+P['atrb']['label']) if isdir(join(P['directory']+P['atrb']['label'], f))]
+	for f in onlydirs:
+		if f not in best_hyperparam_files: shutil.rmtree(f)
 
 def plot_spikes_rates_voltage_train(P,best_results_file,target_signal,losses):
 	spikes_bio=[]
@@ -177,7 +208,7 @@ def plot_spikes_rates_voltage_train(P,best_results_file,target_signal,losses):
 		ax2.plot(voltages[:,nrn])
 		ax2.set(xlabel='time (ms)',ylabel='Voltage (mV)')
 		figure2.savefig('bioneuron_%s_voltages_train.png'%nrn)
-		plt.close(figure)
+		plt.close(figure2)
 	os.chdir('..')
 
 def plot_hyperopt_loss(P,losses):

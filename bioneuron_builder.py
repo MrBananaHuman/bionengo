@@ -21,6 +21,8 @@ class BahlNeuron(nengo.neurons.NeuronType):
 		self.label=label
 		if self.P['load_weights']==True: self.best_hyperparam_files=True
 		else: self.best_hyperparam_files=None
+		self.atrb={}
+		self.inputs={}
 
 	def create(self,bio_idx):
 		return self.Bahl(bio_idx)
@@ -63,8 +65,9 @@ class BahlNeuron(nengo.neurons.NeuronType):
 		return np.ones(len(max_rates)),np.ones(len(max_rates))
 
 	def step_math(self,dt,spiked,neurons,voltage,time):
-		desired_t=time*1000
-		neuron.run(desired_t) 
+		# print 'step math', self.father_op.label
+		t_neuron=time*1000
+		neuron.run(t_neuron) 
 		new_spiked=[]
 		new_voltage=[]
 		for nrn in neurons:
@@ -96,10 +99,13 @@ class SimBahlNeuron(Operator):
 		self.incs=[]
 		self.P=self.neurons.P
 		self.label=self.neurons.label
-		self.ens_atributes=None #stores nengo information about the ensemble
 		self.inputs={}
 		self.neurons.neurons=[self.neurons.create(i) for i in range(self.P[self.label]['n_neurons'])] #range(output.shape[0]) for full
+		self.ens_atributes=self.neurons.atrb
+		self.inputs=self.neurons.inputs
 		self.best_hyperparam_files=self.neurons.best_hyperparam_files
+		self.targets=self.neurons.targets
+		self.activities=self.neurons.activities
 
 	def make_step(self,signals,dt,rng):
 		output=signals[self.output]
@@ -146,23 +152,69 @@ class TransmitSpikes(Operator):
 	def __init__(self,ens_pre_label,spikes,bahl_op,states):
 		self.ens_pre_label=ens_pre_label
 		self.spikes=spikes
+		self.bahl_op=bahl_op
 		self.neurons=bahl_op.neurons.neurons
 		self.time=states[0]
 		self.reads=[spikes,states[0]]
 		self.updates=[]
 		self.sets=[]
 		self.incs=[]
-
+		if self.bahl_op.ens_atributes['label'] == 'ens_bio':
+			self.trained_voltages=[]
+			self.trained_spikes=[]
+			for file in self.bahl_op.best_hyperparam_files:
+				spikes_rates_bio_ideal=np.load(file+'/spikes_rates_bio_ideal.npz')
+				self.trained_voltages.append(spikes_rates_bio_ideal['voltages'])
+				self.trained_spikes.append(spikes_rates_bio_ideal['spikes_bio'])
+			self.trained_voltages=np.array(self.trained_voltages).T
+			self.trained_spikes=np.array(self.trained_spikes).T
+			self.ideal_spikes=np.load(self.bahl_op.P['directory']+self.bahl_op.ens_atributes['label']+'/spikes_from_%s_to_%s.npz'%('ens_bio','ens_bio'))['spikes']
+			self.spikes_pre_to_bio=np.load(self.bahl_op.P['directory']+self.bahl_op.ens_atributes['label']+'/spikes_from_%s_to_%s.npz'%('pre','ens_bio'))['spikes']
+		# ipdb.set_trace()
 	def make_step(self,signals,dt,rng):
 		spikes=signals[self.spikes]
 		time=signals[self.time]
 		def step():
 			'event-based method'
-			for n in range(spikes.shape[0]): #for each input neuron
-				if spikes[n] > 0: #if input neuron spiked
-					for nrn in self.neurons: #for each bioneuron
-						for syn in nrn.synapses[self.ens_pre_label][n]: #for each synapse conn. to input
-							syn.spike_in.event(1.0*time*1000) #add a spike at time (ms)
+			tback=time-dt
+			t_neuron=tback*1000
+			# print 'make_step', 'ens', self.bahl_op.ens_atributes['label'], 'pre', self.ens_pre_label
+
+			if self.bahl_op.ens_atributes['label'] == 'ens_bio' and self.ens_pre_label == 'ens_bio':
+				try:
+					# print time, round(time/dt)
+					# print 'ideal bio-bio spikes', self.ideal_spikes[round(time/dt)]
+					# print 'trained bio-bio spikes', self.trained_spikes[round(time/dt)]
+					# print 'actual bio-bio spikes', spikes
+					# print 'trained bio voltages', self.trained_voltages[round(time/self.bahl_op.P['dt_neuron'])]
+					# print 'actual bio voltages', [np.array(nrn.v_record)[-1] for nrn in self.neurons]
+					# if time == 0.020: ipdb.set_trace()
+					for n in range(spikes.shape[0]): #for each input neuron
+						# if self.trained_spikes[round(time/dt),n] > 0: #if input neuron spiked
+						if spikes[n] > 0: #if input neuron spiked
+							for nrn in self.neurons: #for each bioneuron
+								for syn in nrn.synapses[self.ens_pre_label][n]: #for each synapse conn. to input
+									syn.spike_in.event(t_neuron) #add a spike at time (ms)
+				except: print 'out of range'
+
+			elif self.bahl_op.ens_atributes['label'] == 'ens_bio' and self.ens_pre_label == 'pre':
+				try:
+					# print 'ideal pre-bio spikes', self.spikes_pre_to_bio[round(time/dt)]
+					# print 'actual pre-bio spikes', spikes
+					for n in range(spikes.shape[0]): #for each input neuron
+						# if spikes[n] > 0: #if input neuron spiked
+						if self.spikes_pre_to_bio[round(time/dt),n] > 0: #if input neuron spiked
+							for nrn in self.neurons: #for each bioneuron
+								for syn in nrn.synapses[self.ens_pre_label][n]: #for each synapse conn. to input
+									syn.spike_in.event(t_neuron) #add a spike at time (ms)
+				except: print 'out of range'
+
+			else:
+				for n in range(spikes.shape[0]): #for each input neuron
+					if spikes[n] > 0: #if input neuron spiked
+						for nrn in self.neurons: #for each bioneuron
+							for syn in nrn.synapses[self.ens_pre_label][n]: #for each synapse conn. to input
+								syn.spike_in.event(t_neuron) #add a spike at time (ms)
 		return step
 
 @Builder.register(BahlNeuron)
@@ -186,37 +238,17 @@ def build_connection(model,conn):
 	if use_nrn: #bioneuron connection
 		rng = np.random.RandomState(model.seeds[conn])
 		model.sig[conn]['in']=model.sig[conn.pre]['out']
-		P=copy.copy(conn.post.neuron_type.P)
-		bahl_op=conn.post.neuron_type.father_op
-		if bahl_op.ens_atributes==None:
-			bahl_op.ens_atributes={}
-			bahl_op.ens_atributes['label']=conn.post.label
-			bahl_op.ens_atributes['neurons']=conn.post.n_neurons
-			bahl_op.ens_atributes['dim']=conn.post.dimensions
-			bahl_op.ens_atributes['min_rate']=conn.post.max_rates.low
-			bahl_op.ens_atributes['max_rate']=conn.post.max_rates.high
-			bahl_op.ens_atributes['radius']=conn.post.radius
-			bahl_op.ens_atributes['seed']=conn.post.seed
-			bahl_op.ens_atributes['n_syn']=P[bahl_op.label]['n_syn']
-			bahl_op.ens_atributes['evals']=P[bahl_op.label]['evals']
-			bahl_op.ens_atributes['tau']=P[bahl_op.label]['tau']
-		#if there's no saved information about this input, save the connection info and later optimize
-		if conn.pre.label not in bahl_op.inputs:
-			bahl_op.inputs[conn.pre.label]={}
-			bahl_op.inputs[conn.pre.label]['pre_label']=conn.pre.label
-			bahl_op.inputs[conn.pre.label]['pre_neurons']=conn.pre.n_neurons
-			bahl_op.inputs[conn.pre.label]['pre_dim']=conn.pre.dimensions
-			bahl_op.inputs[conn.pre.label]['pre_min_rate']=conn.pre.max_rates.low
-			bahl_op.inputs[conn.pre.label]['pre_max_rate']=conn.pre.max_rates.high
-			# bahl_op.inputs[conn.pre.label]['pre_radius']=conn.pre.radius
-			# bahl_op.inputs[conn.pre.label]['pre_seed']=conn.pre.seed
-			# bahl_op.inputs[conn.pre.label]['pre_type']=str(conn.pre.neuron_type)
-			# bahl_op.inputs[conn.pre.label]['transform']=conn.transform
-			# bahl_op.inputs[conn.pre.label]['synapse']=conn.synapse
-		model.params[conn] = BuiltConnection(eval_points=None,
-                                         solver_info=None,
-                                         transform=None,
-                                         weights=None)
+		# bahl_op=conn.post.neuron_type.father_op
+		# bahl_op.ens_atributes=conn.post.neuron_type.atrb
+		# bahl_op.inputs=conn.post.neuron_type.inputs
+		from nengo.dists import get_samples	
+		from nengo.builder.connection import build_decoders
+		transform = get_samples(conn.transform, conn.size_out, d=conn.size_mid, rng=rng)
+		eval_points, weights, solver_info = build_decoders(model, conn, rng, transform)
+		model.params[conn] = BuiltConnection(eval_points=eval_points,
+                                         solver_info=solver_info,
+                                         transform=transform,
+                                         weights=weights)
 
 	else: #normal connection
 		return nengo.builder.connection.build_connection(model, conn)
@@ -224,11 +256,38 @@ def build_connection(model,conn):
 '''Helper Functions #############################################################################'''
 '''################ #############################################################################'''
 
-def pre_build_func(network,dt): #or take P instead of model
-	#called in simulator.py after network is defined and operators are created but before decoders are calculated.
+def pre_build_func(network,dt):
+	'''called in simulator.py after network is defined and operators are created but before decoders are calculated.'''
+	#first save all information about incoming connections to attributes on ens.neuron_type
+	for ens in network.ensembles:
+		if not isinstance(ens.neuron_type,BahlNeuron): continue #only bioensembles selected
+		# ens.neuron_type.atrb={}
+		# ens.neuron_type.inputs={}
+		for conn in network.connections:
+			if conn.post == ens:
+				if len(ens.neuron_type.atrb) == 0:
+					ens.neuron_type.atrb['label']=conn.post.label
+					ens.neuron_type.atrb['neurons']=conn.post.n_neurons
+					ens.neuron_type.atrb['dim']=conn.post.dimensions
+					ens.neuron_type.atrb['min_rate']=conn.post.max_rates.low
+					ens.neuron_type.atrb['max_rate']=conn.post.max_rates.high
+					ens.neuron_type.atrb['radius']=conn.post.radius
+					ens.neuron_type.atrb['seed']=conn.post.seed
+					ens.neuron_type.atrb['n_syn']=ens.neuron_type.P[conn.post.label]['n_syn']
+					ens.neuron_type.atrb['evals']=ens.neuron_type.P[conn.post.label]['evals']
+					ens.neuron_type.atrb['tau']=ens.neuron_type.P[conn.post.label]['tau']
+				if conn.pre.label not in ens.neuron_type.inputs:
+					ens.neuron_type.inputs[conn.pre.label]={}
+					ens.neuron_type.inputs[conn.pre.label]['pre_label']=conn.pre.label
+					ens.neuron_type.inputs[conn.pre.label]['pre_neurons']=conn.pre.n_neurons
+					ens.neuron_type.inputs[conn.pre.label]['pre_dim']=conn.pre.dimensions
+					ens.neuron_type.inputs[conn.pre.label]['pre_min_rate']=conn.pre.max_rates.low
+					ens.neuron_type.inputs[conn.pre.label]['pre_max_rate']=conn.pre.max_rates.high
+
+	print 'Generating pre spikes, ideal spikes, target values...'
 	bio_dict={}
-	lif_net=copy.deepcopy(network)
-	# lif_net=network.copy()
+	# lif_net=copy.deepcopy(network)
+	lif_net=network.copy()
 	#Replaces all bioneurons in network with LIF neurons, runs the model with space-covering inputs,
 	#collects spikes into the bioneurons (pres) and spikes out of the LIF neurons (ideal)
 	for ens in lif_net.ensembles:
@@ -236,6 +295,7 @@ def pre_build_func(network,dt): #or take P instead of model
 		P=ens.neuron_type.P
 		bio_dict[ens.label]={}
 		with lif_net:
+			ens.neuron_type=nengo.LIF() #replace bioensemble with param-identical LIF ensemble
 			bio_dict[ens.label]['probe_ideal_spikes']=nengo.Probe(ens.neurons,'spikes') #probe output spikes
 		bio_dict[ens.label]['inputs']={}
 		for conn in lif_net.connections:
@@ -244,10 +304,9 @@ def pre_build_func(network,dt): #or take P instead of model
 				with lif_net: 
 					bio_dict[ens.label]['inputs'][conn.pre_obj.label]['probe_pre_spikes']=\
 							nengo.Probe(conn.pre_obj.neurons,'spikes')
-		with lif_net: ens.neuron_type=nengo.LIF() #replace bioensemble with param-identical LIF ensemble
 
-	target_net=copy.deepcopy(network)
-	# target_net=network.copy()
+	# target_net=copy.deepcopy(network)
+	target_net=network.copy()
 	#replace all neurons in target_net with direct neurons to simulate target values (analytic solution)
 	del target_net.probes[:]
 	with target_net:
@@ -267,7 +326,9 @@ def pre_build_func(network,dt): #or take P instead of model
 		target_sim.run(P['train']['t_final'])
 
 	#save probe data in .npz files, which are loaded during training and decoder calculation
+	# print 'decoders in pre_build_func'
 	for bio in bio_dict.iterkeys():
+		# print bio
 		try: 
 			os.makedirs(bio)
 			os.chdir(bio)
@@ -276,21 +337,44 @@ def pre_build_func(network,dt): #or take P instead of model
 		bio_dict[bio]['ideal_spikes']=lif_sim.data[bio_dict[bio]['probe_ideal_spikes']]
 		bio_dict[bio]['ideal_output']=target_sim.data[bio_dict[bio]['probe_ideal_output']]
 		for conn in lif_net.connections:
-			if conn.pre.label in bio_dict[bio]['inputs']:
-					bio_dict[bio]['inputs'][conn.pre.label]['decoders']=lif_sim.data[conn].weights.T
+			# print conn
+			if conn.pre.label in bio_dict[bio]['inputs'] and conn.post_obj.label == bio:
+				# print conn.pre.label, lif_sim.data[conn].weights.T
+				bio_dict[bio]['inputs'][conn.pre.label]['decoders']=lif_sim.data[conn].weights.T
 		for inpt in bio_dict[bio]['inputs'].iterkeys():
 			bio_dict[bio]['inputs'][inpt]['pre_spikes']=\
 					lif_sim.data[bio_dict[bio]['inputs'][inpt]['probe_pre_spikes']]
 			np.savez('spikes_from_%s_to_%s.npz'%(inpt,bio),spikes=\
 					bio_dict[bio]['inputs'][inpt]['pre_spikes'])
+			# ipdb.set_trace()
 			np.savez('decoders_from_%s_to_%s.npz'%(inpt,bio),decoders=\
 					bio_dict[bio]['inputs'][inpt]['decoders'])
 			# print inpt, bio_dict[bio]['inputs'][inpt]['decoders']
 		np.savez('spikes_ideal_%s.npz'%bio,spikes=bio_dict[bio]['ideal_spikes'])
 		np.savez('output_ideal_%s.npz'%bio,values=bio_dict[bio]['ideal_output'])
 		os.chdir('..')
-	print 'Pre spikes, ideal spikes, target values generated...'
+	del lif_net, lif_sim, target_net, target_sim
+	
+	#run the optimization
+	optimize_bioensembles(network)
 
+def optimize_bioensembles(network):
+	from bioneuron_train import train_hyperparams
+	from bioneuron_helper import load_hyperparams
+	for ens in network.ensembles:
+		if not isinstance(ens.neuron_type,BahlNeuron): continue #only bioensembles selected
+		print 'Optimizing synaptic weights into %s' %ens
+		P=copy.copy(ens.neuron_type.P)
+		# ipdb.set_trace()
+		P['inpts']=ens.neuron_type.inputs
+		P['atrb']=ens.neuron_type.atrb
+		if ens.neuron_type.best_hyperparam_files != None and P['continue_optimization']==False:
+			best_hyperparam_files, targets, activities = load_hyperparams(P) #don't train if filenames already exists
+		else: 
+			best_hyperparam_files, targets, activities = train_hyperparams(P)
+		ens.neuron_type.best_hyperparam_files=best_hyperparam_files
+		ens.neuron_type.targets=targets
+		ens.neuron_type.activities=activities
 
 def post_build_func(model,network):
 	#this function get called in simulator.py after models are built but before signals are created
@@ -299,13 +383,15 @@ def post_build_func(model,network):
 			op.init_cells()
 			op.init_connections()
 			neuron.h.dt=op.P['dt_neuron']*1000
-			t_transient=0.1*op.P['test']['t_final']*1000
-			neuron.init()
-			neuron.run(t_transient) #run out transients (no inputs to model, lets voltages stabilize)
-			for bioneuron in op.neurons.neurons:
-				bioneuron.start_recording() #reset recording attributes in neuron
+			# t_transient=0.1*op.P['test']['t_final']*1000
+			# neuron.init()
+			# print 'Running transients for', op.ens_atributes['label']
+			# neuron.run(t_transient) #run out transients (no inputs to model, lets voltages stabilize)
+			# for bioneuron in op.neurons.neurons:
+			# 	bioneuron.start_recording() #reset recording attributes in neuron
 			for conn in network.all_connections:
 				if conn.pre_obj.label in op.inputs and conn.post_obj.label == op.ens_atributes['label']:
+					# print 'transmit spikes on connection', conn, 'with operator', op.ens_atributes['label']
 					model.add_op(TransmitSpikes(
 						conn.pre_obj.label,model.sig[conn.pre]['out'],op,states=[model.time]))
 	neuron.init()
