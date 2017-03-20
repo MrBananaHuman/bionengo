@@ -7,12 +7,14 @@ import json
 import copy
 import ipdb
 import os
+import stat
 import sys
 import gc
 import pickle
 import matplotlib.pyplot as plt
 import seaborn
 from synapses import ExpSyn
+import subprocess
 from pathos.multiprocessing import ProcessingPool as Pool
 from bioneuron_helper import ch_dir, make_signal, load_spikes, load_values, filter_spikes,\
 		filter_spikes_2, export_data, plot_spikes_rates_voltage_train,\
@@ -288,3 +290,80 @@ def train_hyperparams(P):
 	plot_hyperopt_loss(P,np.array(all_losses))
 	np.savez('best_hyperparam_files.npz',best_hyperparam_files=best_hyperparam_files)
 	return best_hyperparam_files,target,rates_bio
+
+'''###############################################################################################################'''
+'''###############################################################################################################'''
+
+def train_hyperparams_serial_farming(P):
+	print 'Training connections into %s' %P['atrb']['label']
+	os.chdir(P['directory']+P['atrb']['label']) #should be created in pre_build_func()
+	param_name='params_ensemble_%s.json'%P['atrb']['label']
+	with open(param_name,'w') as file:
+		json.dump(P,file)
+	#make a bash script
+	bashfilename='/home/pduggins/bin/bash/bash_bioneuron_train.sh'
+	bashfile=open(bashfilename,'w')
+	# bashfile.write('#!/bin/bash/\n')
+	# bashfile.write('DEST_DIR=%s\n'%(P['directory']+P['atrb']['label']))
+	bashfile.write('EXENAME=/home/pduggins/bionengo/bioneuron_train.py\n')
+	bashfile.write('PARAMNAME=%s\n'%param_name)
+	bashfile.write('N_NEURONS=%s\n'%P['atrb']['neurons'])
+	bashfile.write('RUNTIME=%s\n'%P['runtime'])
+	bashfile.write('echo "${EXENAME}"\n')
+	bashfile.write('if [ -e "${EXENAME}" ]\n')
+	bashfile.write('then\n')
+	# bashfile.write('\tcd ${DEST_DIR}\n')
+	bashfile.write('\tfor bionrn in `seq 0 ${N_NEURONS}`; do\n')
+	bashfile.write('\t\techo "Submitting bioneuron training: ${bionrn} of ${N_NEURONS}"\n')
+	bashfile.write('\t\tpython /home/pduggins/bionengo/bioneuron_train.py ${bionrn} ${PARAMNAME}\n')
+	# bashfile.write('\t\tOUTFILE="output_bioneuron_${bionrn}.txt"\n')
+	# bashfile.write('\t\tsqsub -r ${RUNTIME} -q serial -o ${OUTFILE} ./${EXENAME} ${bionrn} ${PARAMNAME}\n')
+	bashfile.write('\tdone;\n')
+	bashfile.write('else\n')
+	bashfile.write('\techo "could not find the above executable"\n')
+	bashfile.write('fi\n')
+	bashfile.close()
+	st = os.stat(bashfilename)
+	os.chmod(bashfilename, st.st_mode | stat.S_IEXEC)
+	subprocess.call(bashfilename,shell=True)
+
+	#create and save a list of the eval_number associated with the minimum loss for each bioneuron
+	best_hyperparam_files, rates_bio, best_losses, all_losses = [], [], [], []
+	for b in range(P['atrb']['neurons']):
+		bionrn=np.load('output_bioneuron_%s.npz'%b)['bionrn']
+		eval_number=np.load('output_bioneuron_%s.npz'%b)['eval']
+		losses=np.load('output_bioneuron_%s.npz'%b)['losses']
+		best_hyperparam_files.append(P['directory']+P['atrb']['label']+'/eval_%s_bioneuron_%s'%(eval_number,bionrn))
+		spikes_rates_bio_ideal=np.load(best_hyperparam_files[-1]+'/spikes_rates_bio_ideal.npz')
+		best_losses.append(np.load(best_hyperparam_files[-1]+'/loss.npz')['loss'])
+		rates_bio.append(spikes_rates_bio_ideal['rates_bio'])
+		all_losses.append(losses)
+	rates_bio=np.array(rates_bio).T
+	os.chdir(P['directory']+P['atrb']['label'])
+	target=np.load('output_ideal_%s.npz'%P['atrb']['label'])['values']
+	#delete files not in best_hyperparam_files
+	delete_extra_hyperparam_files(P,best_hyperparam_files)
+	#plot the spikes and rates of the best run
+	plot_spikes_rates_voltage_train(P,best_hyperparam_files,target,np.array(best_losses))
+	plot_hyperopt_loss(P,np.array(all_losses))
+	np.savez('best_hyperparam_files.npz',best_hyperparam_files=best_hyperparam_files)
+	return best_hyperparam_files,target,rates_bio
+
+
+def main(): #called by bash_bioneuron_train.sh, results sent to OUTPUT_bioneuron_X.txt
+	bionrn=int(sys.argv[1])
+	param_name=sys.argv[2]
+	with open(param_name,'r') as file:
+		P=json.load(file)
+	rng=np.random.RandomState(seed=P['hyperopt_seed']+P['atrb']['seed']+bionrn)
+	if P['decompose_weights']==True:
+		if P['single_encoder']==True: P_hyperopt=make_hyperopt_space_decomposed_weights_single_encoder(P,bionrn,rng)
+		else: P_hyperopt=make_hyperopt_space_decomposed_weights(P,bionrn,rng)
+	else: P_hyperopt=make_hyperopt_space(P,bionrn,rng)
+	results=run_hyperopt(P_hyperopt)
+	np.savez('output_bioneuron_%s.npz'%bionrn,bionrn=results[0],eval=results[1],losses=results[2])
+	return results
+
+
+if __name__ == "__main__":
+   main()

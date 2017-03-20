@@ -361,7 +361,7 @@ def pre_build_func(network,dt):
 	optimize_bioensembles(network)
 
 def optimize_bioensembles(network):
-	from bioneuron_train import train_hyperparams
+	from bioneuron_train import train_hyperparams,train_hyperparams_serial_farming
 	from bioneuron_helper import load_hyperparams
 	for ens in network.ensembles:
 		if not isinstance(ens.neuron_type,BahlNeuron): continue #only bioensembles selected
@@ -373,7 +373,8 @@ def optimize_bioensembles(network):
 		if ens.neuron_type.best_hyperparam_files != None and P['continue_optimization']==False:
 			best_hyperparam_files, targets, activities = load_hyperparams(P) #don't train if filenames already exists
 		else: 
-			best_hyperparam_files, targets, activities = train_hyperparams(P)
+			# best_hyperparam_files, targets, activities = train_hyperparams(P)
+			best_hyperparam_files, targets, activities = train_hyperparams_serial_farming(P)
 		ens.neuron_type.best_hyperparam_files=best_hyperparam_files
 		ens.neuron_type.targets=targets
 		ens.neuron_type.activities=activities

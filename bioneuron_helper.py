@@ -159,7 +159,6 @@ def plot_spikes_rates_voltage_train(P,best_results_file,target_signal,losses):
 	rates_bio=np.array(rates_bio).T
 	rates_ideal=np.array(rates_ideal).T
 	voltages=np.array(voltages).T
-	ipdb.set_trace()
 	rmse=np.sqrt(np.average((rates_bio-rates_ideal)**2))
 	sns.set(context='poster')
 	figure1, (ax0,ax1,ax2) = plt.subplots(3, 1,sharex=True)
@@ -177,6 +176,7 @@ def plot_spikes_rates_voltage_train(P,best_results_file,target_signal,losses):
 		os.chdir('bioneuron_plots')
 	except:
 		os.chdir('bioneuron_plots')
+	ipdb.set_trace()
 	for nrn in range(rates_bio.shape[1]):
 		figure,ax=plt.subplots(1,1)
 		bio_rates_plot=ax.plot(timesteps,rates_bio[:,nrn][:len(timesteps)],linestyle='-')
