@@ -22,6 +22,7 @@ class BioneuronSolver(nengo.solvers.Solver):
 		self.solver=nengo.solvers.LstsqL2()
 
 	def __call__(self,A,Y,rng=None,E=None):
+		# print 'call', self.ens, self.ens.neuron_type, self.decoders
 		from bioneuron_builder import BahlNeuron
 		if self.decoders != None:
 			return self.decoders, dict()
@@ -41,6 +42,4 @@ class BioneuronSolver(nengo.solvers.Solver):
 			# self.decoders=np.ones(self.decoders.shape)
 			# print 'decoders from bioneuron_solver, ens', self.ens, self.decoders
 			return self.decoders, dict()
-		else:
-			return nengo.solvers.LstsqL2()(A,Y,rng=rng,E=E)
 			

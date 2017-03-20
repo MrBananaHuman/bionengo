@@ -134,6 +134,7 @@ class SimBahlNeuron(Operator):
 				bioneuron.synapses[inpt]=np.empty((pre_neurons,pre_synapses),dtype=object)
 				weights=np.load(self.best_hyperparam_files[bionrn]+'/'+inpt+'_weights.npz')['weights']
 				locations=np.load(self.best_hyperparam_files[bionrn]+'/'+inpt+'_locations.npz')['locations']
+				# ipdb.set_trace()
 				for pre in range(pre_neurons):
 					for syn in range(pre_synapses):	
 						section=bioneuron.cell.apical(locations[pre][syn])
@@ -143,7 +144,7 @@ class SimBahlNeuron(Operator):
 				# print '\nBioneuron:', bionrn
 				# print 'Loss:',np.load(self.best_hyperparam_files[bionrn]+'/loss.npz')['loss']
 				# print inpt
-				# print 'Weights:',np.average(weights)
+				# print 'Weights: mean=',np.average(weights),'std=',np.std(weights)
 				# print 'Locations',np.average(locations)
 			bioneuron.start_recording()
 			# print 'Bias:', bioneuron.bias
@@ -184,14 +185,14 @@ class TransmitSpikes(Operator):
 				try:
 					# print time, round(time/dt)
 					# print 'ideal bio-bio spikes', self.ideal_spikes[round(time/dt)]
+					# if self.trained_spikes[round(time/dt)].sum() != spikes.sum():
 					# print 'trained bio-bio spikes', self.trained_spikes[round(time/dt)]
 					# print 'actual bio-bio spikes', spikes
 					# print 'trained bio voltages', self.trained_voltages[round(time/self.bahl_op.P['dt_neuron'])]
 					# print 'actual bio voltages', [np.array(nrn.v_record)[-1] for nrn in self.neurons]
-					# if time == 0.020: ipdb.set_trace()
 					for n in range(spikes.shape[0]): #for each input neuron
-						# if self.trained_spikes[round(time/dt),n] > 0: #if input neuron spiked
-						if spikes[n] > 0: #if input neuron spiked
+						my_spikes=spikes[n] #actual spikes
+						if my_spikes > 0: #if input neuron spiked
 							for nrn in self.neurons: #for each bioneuron
 								for syn in nrn.synapses[self.ens_pre_label][n]: #for each synapse conn. to input
 									syn.spike_in.event(t_neuron) #add a spike at time (ms)
@@ -286,8 +287,8 @@ def pre_build_func(network,dt):
 
 	print 'Generating pre spikes, ideal spikes, target values...'
 	bio_dict={}
-	# lif_net=copy.deepcopy(network)
 	lif_net=network.copy()
+	del lif_net.probes[:]
 	#Replaces all bioneurons in network with LIF neurons, runs the model with space-covering inputs,
 	#collects spikes into the bioneurons (pres) and spikes out of the LIF neurons (ideal)
 	for ens in lif_net.ensembles:
@@ -296,16 +297,17 @@ def pre_build_func(network,dt):
 		bio_dict[ens.label]={}
 		with lif_net:
 			ens.neuron_type=nengo.LIF() #replace bioensemble with param-identical LIF ensemble
+			bio_dict[ens.label]['ensemble']=ens
 			bio_dict[ens.label]['probe_ideal_spikes']=nengo.Probe(ens.neurons,'spikes') #probe output spikes
 		bio_dict[ens.label]['inputs']={}
 		for conn in lif_net.connections:
 			if conn.post == ens:
+				conn.solver=nengo.solvers.LstsqL2()
 				bio_dict[ens.label]['inputs'][conn.pre_obj.label]={}
 				with lif_net: 
 					bio_dict[ens.label]['inputs'][conn.pre_obj.label]['probe_pre_spikes']=\
 							nengo.Probe(conn.pre_obj.neurons,'spikes')
 
-	# target_net=copy.deepcopy(network)
 	target_net=network.copy()
 	#replace all neurons in target_net with direct neurons to simulate target values (analytic solution)
 	del target_net.probes[:]
@@ -320,6 +322,7 @@ def pre_build_func(network,dt):
 			if ens.label in bio_dict:
 				bio_dict[ens.label]['probe_ideal_output']=nengo.Probe(ens,synapse=P['kernel']['tau']) #probe ideal output
 
+	# print 'before sim.run in pre_build_func'
 	with nengo.Simulator(lif_net,dt=dt) as lif_sim:
 		lif_sim.run(P['train']['t_final'])
 	with nengo.Simulator(target_net,dt=dt) as target_sim:
@@ -334,27 +337,26 @@ def pre_build_func(network,dt):
 			os.chdir(bio)
 		except OSError:
 			os.chdir(bio)
+		bio_dict[bio]['encoders']=lif_sim.data[bio_dict[bio]['ensemble']].encoders
 		bio_dict[bio]['ideal_spikes']=lif_sim.data[bio_dict[bio]['probe_ideal_spikes']]
 		bio_dict[bio]['ideal_output']=target_sim.data[bio_dict[bio]['probe_ideal_output']]
 		for conn in lif_net.connections:
-			# print conn
 			if conn.pre.label in bio_dict[bio]['inputs'] and conn.post_obj.label == bio:
-				# print conn.pre.label, lif_sim.data[conn].weights.T
 				bio_dict[bio]['inputs'][conn.pre.label]['decoders']=lif_sim.data[conn].weights.T
 		for inpt in bio_dict[bio]['inputs'].iterkeys():
 			bio_dict[bio]['inputs'][inpt]['pre_spikes']=\
 					lif_sim.data[bio_dict[bio]['inputs'][inpt]['probe_pre_spikes']]
 			np.savez('spikes_from_%s_to_%s.npz'%(inpt,bio),spikes=\
 					bio_dict[bio]['inputs'][inpt]['pre_spikes'])
-			# ipdb.set_trace()
 			np.savez('decoders_from_%s_to_%s.npz'%(inpt,bio),decoders=\
 					bio_dict[bio]['inputs'][inpt]['decoders'])
-			# print inpt, bio_dict[bio]['inputs'][inpt]['decoders']
+		np.savez('encoders_for_%s.npz'%bio,encoders=bio_dict[bio]['encoders'])		
 		np.savez('spikes_ideal_%s.npz'%bio,spikes=bio_dict[bio]['ideal_spikes'])
 		np.savez('output_ideal_%s.npz'%bio,values=bio_dict[bio]['ideal_output'])
 		os.chdir('..')
 	del lif_net, lif_sim, target_net, target_sim
-	
+
+
 	#run the optimization
 	optimize_bioensembles(network)
 

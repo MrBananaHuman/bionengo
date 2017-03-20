@@ -116,22 +116,6 @@ def filter_spikes_2(P,bioneuron,spikes_ideal):
 	voltages=np.array(bioneuron.v_record).ravel()
 	return spikes_bio,spikes_ideal,rates_bio,rates_ideal,voltages	
 
-
-def compute_loss(P,rates_bio,rates_ideal,voltages):
-	rmse=np.sqrt(np.average((rates_bio-rates_ideal)**2))
-	if P['complex_loss']==True:
-		t_total=len(voltages)
-		t_saturated=len(np.where((-40.0<voltages) & (voltages<-20.0))[0]) #when neurons burst initially then saturate, they settle around -40<V<-20
-		L_saturated=np.exp(10*t_saturated/t_total) #time spend in saturated regime exponentially increases loss (max e^10)
-		t_overactive=len(np.where((rates_bio>1.0) & (rates_ideal<1.0))[0]) #comparison to 1.0 rather than 0 ignores tails of filtered spikes
-		L_overactive=t_overactive/10.0 #a single wrong spike is about 125ms, so divide by 10 to get 12.5 loss per wrong spike
-		t_underactive=len(np.where((rates_ideal>1.0) & (rates_bio<1.0))[0])
-		L_underactive=t_underactive/10.0
-		loss=rmse+L_saturated#+L_overactive+L_underactive
-	else:
-		loss=rmse
-	return loss
-
 def export_data(P,weights,locations,bias,spikes_bio,spikes_ideal,rates_bio,rates_ideal,voltages,loss):
 	try:
 		os.makedirs('eval_%s_bioneuron_%s'%(P['current_eval'],P['hyperopt']['bionrn']))
@@ -175,6 +159,7 @@ def plot_spikes_rates_voltage_train(P,best_results_file,target_signal,losses):
 	rates_bio=np.array(rates_bio).T
 	rates_ideal=np.array(rates_ideal).T
 	voltages=np.array(voltages).T
+	ipdb.set_trace()
 	rmse=np.sqrt(np.average((rates_bio-rates_ideal)**2))
 	sns.set(context='poster')
 	figure1, (ax0,ax1,ax2) = plt.subplots(3, 1,sharex=True)

@@ -190,7 +190,7 @@ def main():
 	for nrn in range(len(ens_bio.neuron_type.father_op.neurons.neurons)):
 		neuron=ens_bio.neuron_type.father_op.neurons.neurons[nrn]
 		figure,ax=plt.subplots(1,1)
-		ax.plot(np.array(neuron.v_record))
+		ax.plot(P['dt_neuron']*np.arange(0,len(np.array(neuron.v_record))),np.array(neuron.v_record))
 		ax.set(xlabel='time (ms)', ylabel='Voltage (mV)')
 		figure.savefig('bioneuron_%s_voltages_test.png'%nrn)
 		plt.close(figure)

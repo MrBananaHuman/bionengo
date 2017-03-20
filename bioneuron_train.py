@@ -15,7 +15,7 @@ import seaborn
 from synapses import ExpSyn
 from pathos.multiprocessing import ProcessingPool as Pool
 from bioneuron_helper import ch_dir, make_signal, load_spikes, load_values, filter_spikes,\
-		filter_spikes_2, compute_loss, export_data, plot_spikes_rates_voltage_train,\
+		filter_spikes_2, export_data, plot_spikes_rates_voltage_train,\
 		plot_hyperopt_loss, delete_extra_hyperparam_files
 
 class Bahl():
@@ -83,6 +83,7 @@ def make_hyperopt_space_decomposed_weights(P_in,bionrn,rng):
 	else: hyperparams['bias']=None
 	for inpt in P['inpts'].iterkeys():
 		decoders=np.load('decoders_from_%s_to_%s.npz'%(inpt,P['atrb']['label']))['decoders']
+		k_decoder=1.0/np.linalg.norm(decoders)
 		hyperparams[inpt]={}
 		for pre in range(P['inpts'][inpt]['pre_neurons']):
 			hyperparams[inpt][pre]={}
@@ -91,11 +92,45 @@ def make_hyperopt_space_decomposed_weights(P_in,bionrn,rng):
 				hyperparams[inpt][pre][syn]={}
 				hyperparams[inpt][pre][syn]['l']=np.round(rng.uniform(0.0,1.0),decimals=2)
 				hyperparams[inpt][pre][syn]['e']=[]
+				k_distance=2.0 #weight_rescale(hyperparams[inpt][pre][syn]['l'])
+				k_neurons=50.0/P['inpts'][inpt]['pre_neurons']
+				k_max_rates=300.0/np.average([P['inpts'][inpt]['pre_min_rate'],P['inpts'][inpt]['pre_max_rate']])
+				# k_decoder=1.0/np.average(np.abs(decoders))
+				k=k_distance*k_neurons*k_max_rates*k_decoder
 				for dim in range(decoders.shape[1]):
 					hyperparams[inpt][pre][syn]['e'].append(
-						hyperopt.hp.uniform('e_%s_%s_%s_%s_%s'%(bionrn,inpt,pre,syn,dim),-P['e_0'],P['e_0']))
+						hyperopt.hp.uniform('e_%s_%s_%s_%s_%s'%(bionrn,inpt,pre,syn,dim),-k*P['e_0'],k*P['e_0']))
 	P['hyperopt']=hyperparams
-	return P			
+	return P
+
+def make_hyperopt_space_decomposed_weights_single_encoder(P_in,bionrn,rng):
+	P=copy.copy(P_in)
+	hyperparams={}
+	hyperparams['bionrn']=bionrn
+	if P['optimize_bias']==True: hyperparams['bias']=hyperopt.hp.uniform('b_%s'%bionrn,P['bias_min'],P['bias_max'])
+	else: hyperparams['bias']=None
+	for inpt in P['inpts'].iterkeys():
+		decoders=np.load('decoders_from_%s_to_%s.npz'%(inpt,P['atrb']['label']))['decoders']
+		encoders=np.load('encoders_for_%s.npz'%P['atrb']['label'])['encoders'][bionrn]
+		k_decoder=1.0/np.linalg.norm(decoders)
+		hyperparams[inpt]={}
+		hyperparams[inpt]['encoder']=encoders		
+		for pre in range(P['inpts'][inpt]['pre_neurons']):
+			hyperparams[inpt][pre]={}
+			hyperparams[inpt][pre]['d']=decoders[pre][0]
+			for syn in range(P['atrb']['n_syn']):
+				hyperparams[inpt][pre][syn]={}
+				hyperparams[inpt][pre][syn]['l']=np.round(rng.uniform(0.0,1.0),decimals=2)
+				hyperparams[inpt][pre][syn]['z']=[]
+				k_distance=2.0 #weight_rescale(hyperparams[inpt][pre][syn]['l'])
+				k_neurons=50.0/P['inpts'][inpt]['pre_neurons']
+				k_max_rates=300.0/np.average([P['inpts'][inpt]['pre_min_rate'],P['inpts'][inpt]['pre_max_rate']])
+				k=k_distance*k_neurons*k_max_rates*k_decoder
+				for dim in range(decoders.shape[1]):
+					hyperparams[inpt][pre][syn]['z'].append(
+						hyperopt.hp.uniform('z_%s_%s_%s_%s_%s'%(bionrn,inpt,pre,syn,dim),0.0,k*P['e_0']))
+	P['hyperopt']=hyperparams
+	return P		
 
 def load_hyperopt_space(P):
 	weights={}
@@ -107,10 +142,15 @@ def load_hyperopt_space(P):
 		for pre in range(P['inpts'][inpt]['pre_neurons']):
 			for syn in range(P['atrb']['n_syn']):
 				locations[inpt][pre][syn]=P['hyperopt'][inpt][pre][syn]['l']
-				if P['decompose_weights']== True: #w_ij=d_i dot e_ij
-					weights[inpt][pre][syn]=np.dot(
-							P['hyperopt'][inpt][pre]['d'],
-							np.array(P['hyperopt'][inpt][pre][syn]['e']))
+				if P['decompose_weights']== True:
+					if P['single_encoder']==True: #w_ij=z_i*(d_i dot e_j)
+						weights[inpt][pre][syn]=P['hyperopt'][inpt][pre][syn]['z']*np.dot( 
+								P['hyperopt'][inpt][pre]['d'],
+								np.array(P['hyperopt'][inpt]['encoder']))
+					else: #w_ij=d_i dot e_ij
+						weights[inpt][pre][syn]=np.dot( 
+								P['hyperopt'][inpt][pre]['d'],
+								np.array(P['hyperopt'][inpt][pre][syn]['e']))
 				else:
 					weights[inpt][pre][syn]=P['hyperopt'][inpt][pre][syn]['w']
 	return weights,locations,bias
@@ -121,6 +161,28 @@ def create_bioneuron(P,weights,locations,bias):
 	bioneuron.make_synapses(P,weights,locations)
 	bioneuron.start_recording()
 	return bioneuron	
+
+def compute_loss(P,spikes_bio, spikes_ideal, rates_bio,rates_ideal,voltages):
+	rmse=np.sqrt(np.average((rates_bio-rates_ideal)**2))
+	if P['complex_loss']==True:
+		t_total=len(voltages)
+		t_saturated=len(np.where((-40.0<voltages) & (voltages<-20.0))[0]) #when neurons burst initially then saturate, they settle around -40<V<-20
+		L_saturated=np.exp(10*t_saturated/t_total) #time spend in saturated regime exponentially increases loss (max e^10)
+		#L_startup2=5*np.sqrt(np.average((rates_bio[:100]-rates_ideal[:100])**2))
+		# print L_startup2
+		# t_startup=0
+		# for t in range(30): #first 50 timesteps
+		# 	# print t, spikes_bio[t], spikes_ideal[t]
+		# 	if spikes_bio[t] != spikes_ideal[t]: t_startup+=1
+		# L_startup=10*t_startup
+		# print L_startup
+		loss=rmse+L_saturated#+L_startup2
+	else:
+		loss=rmse
+	return loss
+
+'''###############################################################################################################'''
+'''###############################################################################################################'''
 
 def run_bioneuron_event_based(P,bioneuron,all_spikes_pre):
 	neuron.h.dt = P['dt_neuron']*1000
@@ -138,12 +200,11 @@ def run_bioneuron_event_based(P,bioneuron,all_spikes_pre):
 		# print time, t_neuron
 		neuron.run(t_neuron)
 		for i in range(len(inpts)):  #for each input connection
+			# if inpts[i] == P['atrb']['label'] and time < 50: continue #don't make recurrent connection rely on itself to get going
 			for pre in range(pres[i]): #for each input neuron
 				if all_input_spikes[i][time][pre] > 0: #if input neuron spikes at time
 					bioneuron.event_step(t_neuron,inpts[i],pre)
 
-'''###############################################################################################################'''
-'''###############################################################################################################'''
 
 def simulate(P):
 	os.chdir(P['directory']+P['atrb']['label'])
@@ -154,7 +215,7 @@ def simulate(P):
 	run_bioneuron_event_based(P,bioneuron,all_spikes_pre)
 	spikes_bio,spikes_ideal,rates_bio,rates_ideal,voltages=filter_spikes_2(P,bioneuron,spikes_ideal)
 	# spikes_bio2,spikes_ideal2,rates_bio2,rates_ideal2,voltages2=filter_spikes_2(P,bioneuron,spikes_ideal)
-	loss=compute_loss(P,rates_bio,rates_ideal,voltages)
+	loss=compute_loss(P,spikes_bio, spikes_ideal, rates_bio,rates_ideal,voltages)
 	export_data(P,weights,locations,bias,spikes_bio,spikes_ideal,rates_bio,rates_ideal,voltages,loss)
 	# print P['atrb']['label'], 'neuron', P['hyperopt']['bionrn'], 'loss', loss
 	# for key in weights.iterkeys():
@@ -201,7 +262,9 @@ def train_hyperparams(P):
 	pool = Pool(nodes=P['n_nodes'])
 	rng=np.random.RandomState(seed=P['hyperopt_seed']+P['atrb']['seed'])
 	for bionrn in range(P['atrb']['neurons']):
-		if P['decompose_weights']==True: P_hyperopt=make_hyperopt_space_decomposed_weights(P,bionrn,rng)
+		if P['decompose_weights']==True:
+			if P['single_encoder']==True: P_hyperopt=make_hyperopt_space_decomposed_weights_single_encoder(P,bionrn,rng)
+			else: P_hyperopt=make_hyperopt_space_decomposed_weights(P,bionrn,rng)
 		else: P_hyperopt=make_hyperopt_space(P,bionrn,rng)
 		# run_hyperopt(P_hyperopt)
 		P_list.append(P_hyperopt)
