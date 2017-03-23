@@ -1,0 +1,94 @@
+NEURON -- Release 7.4 (1370:16a7055d4a86) 2015-11-09
+Duke, Yale, and the BlueBrain Project -- Copyright 1984-2015
+See http://www.neuron.yale.edu/neuron/credits
+
+:0: FutureWarning: IPython widgets are experimental and may change in the future.
+load spikes
+load hyperopt
+create bioneuron
+Additional mechanisms from files
+ cad.mod h.mod IKM.mod kca.mod kfast.mod kslow.mod nap.mod nat.mod SlowCa.mod
+	1 
+run bioneuron
+filter spikes
+export data
+Connections into ens_bio2, bioneuron 2, hyperopt 10.0%
+load spikes
+load hyperopt
+create bioneuron
+run bioneuron
+filter spikes
+export data
+Connections into ens_bio2, bioneuron 2, hyperopt 20.0%
+load spikes
+load hyperopt
+create bioneuron
+run bioneuron
+filter spikes
+export data
+Connections into ens_bio2, bioneuron 2, hyperopt 30.0%
+load spikes
+load hyperopt
+create bioneuron
+run bioneuron
+filter spikes
+export data
+Connections into ens_bio2, bioneuron 2, hyperopt 40.0%
+load spikes
+load hyperopt
+create bioneuron
+run bioneuron
+filter spikes
+export data
+Connections into ens_bio2, bioneuron 2, hyperopt 50.0%
+load spikes
+load hyperopt
+create bioneuron
+run bioneuron
+filter spikes
+export data
+Connections into ens_bio2, bioneuron 2, hyperopt 60.0%
+load spikes
+load hyperopt
+create bioneuron
+run bioneuron
+filter spikes
+export data
+Connections into ens_bio2, bioneuron 2, hyperopt 70.0%
+load spikes
+load hyperopt
+create bioneuron
+run bioneuron
+filter spikes
+export data
+Connections into ens_bio2, bioneuron 2, hyperopt 80.0%
+load spikes
+load hyperopt
+create bioneuron
+run bioneuron
+filter spikes
+export data
+Connections into ens_bio2, bioneuron 2, hyperopt 90.0%
+load spikes
+load hyperopt
+create bioneuron
+run bioneuron
+filter spikes
+export data
+Connections into ens_bio2, bioneuron 2, hyperopt 100.0%
+--- SharcNET Job Epilogue ---
+              job id: 9856988
+         exit status: 0
+            cpu time: 42s / 1.0h (1 %)
+        elapsed time: 69s / 1.0h (1 %)
+      virtual memory: 1.0G / 1.0G (103 %)
+
+Job completed successfully
+WARNING: Job only used 1 % of its requested walltime.
+WARNING: Job only used 1 % of its requested cpu time.
+WARNING: Job only used 60 % of allocated cpu time.
+NEURON -- Release 7.4 (1370:16a7055d4a86) 2015-11-09
+Duke, Yale, and the BlueBrain Project -- Copyright 1984-2015
+See http://www.neuron.yale.edu/neuron/credits
+
+:0: FutureWarning: IPython widgets are experimental and may change in the future.
