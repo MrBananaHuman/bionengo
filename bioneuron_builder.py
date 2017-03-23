@@ -124,15 +124,19 @@ class SimBahlNeuron(Operator):
 		from synapses import ExpSyn
 		for bionrn in range(len(self.neurons.neurons)):
 			bioneuron=self.neurons.neurons[bionrn]
+			filename=self.best_hyperparam_files[bionrn]
+			if self.P['platform']=='workstation':
+				filename=str(filename).replace('/work','/home')
+				filename=filename.replace('/psipeter','/pduggins')
 			if self.P['optimize_bias']==True:
-				bioneuron.bias=np.load(self.best_hyperparam_files[bionrn]+'/bias.npz')['bias']
+				bioneuron.bias=np.load(filename+'/bias.npz')['bias']
 				bioneuron.add_bias()
 			for inpt in self.inputs.iterkeys():
 				pre_neurons=self.inputs[inpt]['pre_neurons']
 				pre_synapses=self.ens_atributes['n_syn']
 				bioneuron.synapses[inpt]=np.empty((pre_neurons,pre_synapses),dtype=object)
-				weights=np.load(self.best_hyperparam_files[bionrn]+'/'+inpt+'_weights.npz')['weights']
-				locations=np.load(self.best_hyperparam_files[bionrn]+'/'+inpt+'_locations.npz')['locations']
+				weights=np.load(filename+'/'+inpt+'_weights.npz')['weights']
+				locations=np.load(filename+'/'+inpt+'_locations.npz')['locations']
 				for pre in range(pre_neurons):
 					for syn in range(pre_synapses):	
 						section=bioneuron.cell.apical(locations[pre][syn])
@@ -161,8 +165,11 @@ class TransmitSpikes(Operator):
 		if self.bahl_op.ens_atributes['label'] == 'ens_bio':
 			self.trained_voltages=[]
 			self.trained_spikes=[]
-			for file in self.bahl_op.best_hyperparam_files:
-				spikes_rates_bio_ideal=np.load(file+'/spikes_rates_bio_ideal.npz')
+			for filename in self.bahl_op.best_hyperparam_files:
+				if self.bahl_op.P['platform']=='workstation':
+					filename=str(filename).replace('/work','/home')
+					filename=filename.replace('/psipeter','/pduggins')
+				spikes_rates_bio_ideal=np.load(filename+'/spikes_rates_bio_ideal.npz')
 				self.trained_voltages.append(spikes_rates_bio_ideal['voltages'])
 				self.trained_spikes.append(spikes_rates_bio_ideal['spikes_bio'])
 			self.trained_voltages=np.array(self.trained_voltages).T

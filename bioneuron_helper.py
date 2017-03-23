@@ -148,8 +148,11 @@ def plot_spikes_rates_voltage_train(P,best_results_file,target_signal,losses):
 	rates_bio=[]
 	rates_ideal=[]
 	voltages=[]
-	for file in best_results_file:
-		spikes_rates_bio_ideal=np.load(file+'/spikes_rates_bio_ideal.npz')
+	for filename in best_results_file:
+		if P['platform']=='workstation':
+			filename=str(filename).replace('/work','/home')
+			filename=filename.replace('/psipeter','/pduggins')
+		spikes_rates_bio_ideal=np.load(filename+'/spikes_rates_bio_ideal.npz')
 		spikes_bio.append(spikes_rates_bio_ideal['spikes_bio'])
 		spikes_ideal.append(spikes_rates_bio_ideal['spikes_ideal'])
 		rates_bio.append(spikes_rates_bio_ideal['rates_bio'])
@@ -177,7 +180,6 @@ def plot_spikes_rates_voltage_train(P,best_results_file,target_signal,losses):
 		os.chdir('bioneuron_plots')
 	except:
 		os.chdir('bioneuron_plots')
-	ipdb.set_trace()
 	for nrn in range(rates_bio.shape[1]):
 		figure,ax=plt.subplots(1,1)
 		bio_rates_plot=ax.plot(timesteps,rates_bio[:,nrn][:len(timesteps)],linestyle='-')
@@ -220,9 +222,12 @@ def load_hyperparams(P_in):
 	rates_bio=[]
 	best_losses=[]
 	best_hyperparam_files=np.load('best_hyperparam_files.npz')['best_hyperparam_files']
-	for hyperparam_file in best_hyperparam_files:
-		spikes_rates_bio_ideal=np.load(hyperparam_file+'/spikes_rates_bio_ideal.npz')
-		best_losses.append(np.load(hyperparam_file+'/loss.npz')['loss'])
+	for filename in best_hyperparam_files:
+		if P['platform']=='workstation':
+			filename=str(filename).replace('/work','/home')
+			filename=filename.replace('/psipeter','/pduggins')
+		spikes_rates_bio_ideal=np.load(filename+'/spikes_rates_bio_ideal.npz')
+		best_losses.append(np.load(filename+'/loss.npz')['loss'])
 		rates_bio.append(spikes_rates_bio_ideal['rates_bio'])
 	rates_bio=np.array(rates_bio).T
 	target_signal=np.load('output_ideal_%s.npz'%P['atrb']['label'])['values']

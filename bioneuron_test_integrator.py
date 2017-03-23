@@ -4,6 +4,9 @@ import ipdb
 import json
 import copy
 import os
+import matplotlib.pyplot as plt
+import seaborn as sns
+from nengo.utils.matplotlib import rasterplot
 from bioneuron_builder import BahlNeuron, pre_build_func, post_build_func
 from bioneuron_solver import BioneuronSolver
 from bioneuron_helper import make_signal,ch_dir
