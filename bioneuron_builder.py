@@ -1,4 +1,5 @@
 import numpy as np
+import time
 import nengo
 import neuron
 from nengo.builder import Builder, Operator, Signal
@@ -33,16 +34,14 @@ class BahlNeuron(nengo.neurons.NeuronType):
 		from synapses import ExpSyn
 		import os
 		def __init__(self,bio_idx):
-			# neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc') #todo: hardcoded path
-			neuron.h.load_file('/home/pduggins/bionengo/NEURON_models/bahl.hoc') #todo: hardcoded path
-			# neuron.h.load_file('/home/pduggins/bionengo/NEURON_models/bahl2.hoc') #todo: hardcoded path
+			if P['platform']=='workstation']:  neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc') #todo: hardcoded path
+			elif P['platform']=='sharcnet': neuron.h.load_file('/home/psipeter/bionengo/NEURON_models/bahl.hoc') #todo: hardcoded path
 			self.bio_idx=bio_idx
 			self.bias = None
 			self.synapses = {}
 			self.netcons = {}
 		def add_cell(self): 
 			self.cell = neuron.h.Bahl()
-			# self.cell = neuron.h.Bahl2()
 		def add_bias(self):
 			self.bias_current = neuron.h.IClamp(self.cell.soma(0.5))
 			self.bias_current.delay = 0
@@ -134,7 +133,6 @@ class SimBahlNeuron(Operator):
 				bioneuron.synapses[inpt]=np.empty((pre_neurons,pre_synapses),dtype=object)
 				weights=np.load(self.best_hyperparam_files[bionrn]+'/'+inpt+'_weights.npz')['weights']
 				locations=np.load(self.best_hyperparam_files[bionrn]+'/'+inpt+'_locations.npz')['locations']
-				# ipdb.set_trace()
 				for pre in range(pre_neurons):
 					for syn in range(pre_synapses):	
 						section=bioneuron.cell.apical(locations[pre][syn])
@@ -203,8 +201,8 @@ class TransmitSpikes(Operator):
 					# print 'ideal pre-bio spikes', self.spikes_pre_to_bio[round(time/dt)]
 					# print 'actual pre-bio spikes', spikes
 					for n in range(spikes.shape[0]): #for each input neuron
-						# if spikes[n] > 0: #if input neuron spiked
-						if self.spikes_pre_to_bio[round(time/dt),n] > 0: #if input neuron spiked
+						if spikes[n] > 0: #if input neuron spiked
+						#if self.spikes_pre_to_bio[round(time/dt),n] > 0: #if input neuron spiked
 							for nrn in self.neurons: #for each bioneuron
 								for syn in nrn.synapses[self.ens_pre_label][n]: #for each synapse conn. to input
 									syn.spike_in.event(t_neuron) #add a spike at time (ms)
@@ -239,9 +237,6 @@ def build_connection(model,conn):
 	if use_nrn: #bioneuron connection
 		rng = np.random.RandomState(model.seeds[conn])
 		model.sig[conn]['in']=model.sig[conn.pre]['out']
-		# bahl_op=conn.post.neuron_type.father_op
-		# bahl_op.ens_atributes=conn.post.neuron_type.atrb
-		# bahl_op.inputs=conn.post.neuron_type.inputs
 		from nengo.dists import get_samples	
 		from nengo.builder.connection import build_decoders
 		transform = get_samples(conn.transform, conn.size_out, d=conn.size_mid, rng=rng)
@@ -262,8 +257,6 @@ def pre_build_func(network,dt):
 	#first save all information about incoming connections to attributes on ens.neuron_type
 	for ens in network.ensembles:
 		if not isinstance(ens.neuron_type,BahlNeuron): continue #only bioensembles selected
-		# ens.neuron_type.atrb={}
-		# ens.neuron_type.inputs={}
 		for conn in network.connections:
 			if conn.post == ens:
 				if len(ens.neuron_type.atrb) == 0:
@@ -322,16 +315,13 @@ def pre_build_func(network,dt):
 			if ens.label in bio_dict:
 				bio_dict[ens.label]['probe_ideal_output']=nengo.Probe(ens,synapse=P['kernel']['tau']) #probe ideal output
 
-	# print 'before sim.run in pre_build_func'
 	with nengo.Simulator(lif_net,dt=dt) as lif_sim:
 		lif_sim.run(P['train']['t_final'])
 	with nengo.Simulator(target_net,dt=dt) as target_sim:
 		target_sim.run(P['train']['t_final'])
 
 	#save probe data in .npz files, which are loaded during training and decoder calculation
-	# print 'decoders in pre_build_func'
 	for bio in bio_dict.iterkeys():
-		# print bio
 		try: 
 			os.makedirs(bio)
 			os.chdir(bio)
@@ -373,8 +363,21 @@ def optimize_bioensembles(network):
 		if ens.neuron_type.best_hyperparam_files != None and P['continue_optimization']==False:
 			best_hyperparam_files, targets, activities = load_hyperparams(P) #don't train if filenames already exists
 		else: 
-			# best_hyperparam_files, targets, activities = train_hyperparams(P)
-			best_hyperparam_files, targets, activities = train_hyperparams_serial_farming(P)
+			if P['platform']=='workstation']:best_hyperparam_files, targets, activities = train_hyperparams(P)
+			elif P['platform']=='sharcnet']:
+				train_hyperparams_serial_farming(P)
+				directory=P['directory']+P['atrb']['label']+'/'
+				#wait until the necessary files have been generated
+				files_saved=False
+				print 'entering while loop...'
+				while files_saved==False:
+					try:
+						best_hyperparam_files=np.load(directory+'best_hyperparam_files.npz')['best_hyperparam_files']
+						targets=np.load(directory+'target.npz')['target']
+						activities=np.load(directory+'rates_bio.npz')['rates_bio']
+						files_saved=True
+					except IOError:
+						time.sleep(10.0)
 		ens.neuron_type.best_hyperparam_files=best_hyperparam_files
 		ens.neuron_type.targets=targets
 		ens.neuron_type.activities=activities
@@ -394,7 +397,6 @@ def post_build_func(model,network):
 			# 	bioneuron.start_recording() #reset recording attributes in neuron
 			for conn in network.all_connections:
 				if conn.pre_obj.label in op.inputs and conn.post_obj.label == op.ens_atributes['label']:
-					# print 'transmit spikes on connection', conn, 'with operator', op.ens_atributes['label']
 					model.add_op(TransmitSpikes(
 						conn.pre_obj.label,model.sig[conn.pre]['out'],op,states=[model.time]))
 	neuron.init()

@@ -1,3 +1,8 @@
+#!/usr/bin/env python
+'''
+/home/psipeter/.virtualenv/test/bin:
+/opt/sharcnet/python/2.7.8/intel/bin:
+'''
 import numpy as np
 import nengo
 import neuron
@@ -11,18 +16,15 @@ import stat
 import sys
 import gc
 import pickle
-import matplotlib.pyplot as plt
-import seaborn
 from synapses import ExpSyn
 import subprocess
-from pathos.multiprocessing import ProcessingPool as Pool
 from bioneuron_helper import ch_dir, make_signal, load_spikes, load_values, filter_spikes,\
 		filter_spikes_2, export_data, plot_spikes_rates_voltage_train,\
 		plot_hyperopt_loss, delete_extra_hyperparam_files
 
 class Bahl():
 	def __init__(self,P):
-		neuron.h.load_file('/home/pduggins/bionengo/NEURON_models/bahl.hoc')
+		neuron.h.load_file('/home/psipeter/bionengo/NEURON_models/bahl.hoc')
 		self.cell = neuron.h.Bahl()
 		self.synapses={}
 		self.netcons={}
@@ -210,14 +212,20 @@ def run_bioneuron_event_based(P,bioneuron,all_spikes_pre):
 
 def simulate(P):
 	os.chdir(P['directory']+P['atrb']['label'])
+	print 'load spikes'
 	all_spikes_pre,all_spikes_ideal=load_spikes(P)
 	spikes_ideal=all_spikes_ideal[:,P['hyperopt']['bionrn']]
+	print 'load hyperopt'
 	weights,locations,bias=load_hyperopt_space(P)
+	print 'create bioneuron'
 	bioneuron=create_bioneuron(P,weights,locations,bias)
+	print 'run bioneuron'
 	run_bioneuron_event_based(P,bioneuron,all_spikes_pre)
+	print 'filter spikes'
 	spikes_bio,spikes_ideal,rates_bio,rates_ideal,voltages=filter_spikes_2(P,bioneuron,spikes_ideal)
 	# spikes_bio2,spikes_ideal2,rates_bio2,rates_ideal2,voltages2=filter_spikes_2(P,bioneuron,spikes_ideal)
 	loss=compute_loss(P,spikes_bio, spikes_ideal, rates_bio,rates_ideal,voltages)
+	print 'export data'
 	export_data(P,weights,locations,bias,spikes_bio,spikes_ideal,rates_bio,rates_ideal,voltages,loss)
 	# print P['atrb']['label'], 'neuron', P['hyperopt']['bionrn'], 'loss', loss
 	# for key in weights.iterkeys():
@@ -245,7 +253,7 @@ def run_hyperopt(P):
 		print 'Connections into %s, bioneuron %s, hyperopt %s%%'\
 			%(P['atrb']['label'],P['hyperopt']['bionrn'],100.0*(t+1)/P['atrb']['evals'])
 		#save trials object for checkpoints / continued training later
-		if t % int(P['atrb']['evals']/3) == 0:
+		if t % int(P['atrb']['evals']/3) == 0 and P['save_hyperopt_trials'] == True:
 			pickle.dump(trials,open('bioneuron_%s_hyperopt_trials.p'%P['hyperopt']['bionrn'],'wb'))
 	#find best run's directory location
 	losses=[t['result']['loss'] for t in trials]
@@ -300,70 +308,54 @@ def train_hyperparams_serial_farming(P):
 	param_name='params_ensemble_%s.json'%P['atrb']['label']
 	with open(param_name,'w') as file:
 		json.dump(P,file)
-	#make a bash script
-	bashfilename='/home/pduggins/bin/bash/bash_bioneuron_train.sh'
+	#id_filenames=['idfile_bioneuron_%s.txt'%bionrn for bionrn in range(P['atrb']['neurons'])]
+	#make a bash script to submit training for each neuron
+	bashfilename='/home/psipeter/.local/bin/bash/bash_submit_train.sh'
 	bashfile=open(bashfilename,'w')
 	# bashfile.write('#!/bin/bash/\n')
-	# bashfile.write('DEST_DIR=%s\n'%(P['directory']+P['atrb']['label']))
-	bashfile.write('EXENAME=/home/pduggins/bionengo/bioneuron_train.py\n')
+	bashfile.write('DEST_DIR=%s\n'%(P['directory']+P['atrb']['label']))
 	bashfile.write('PARAMNAME=%s\n'%param_name)
-	bashfile.write('N_NEURONS=%s\n'%P['atrb']['neurons'])
+	bashfile.write('N_NEURONS=%s\n'%(P['atrb']['neurons']-1))
 	bashfile.write('RUNTIME=%s\n'%P['runtime'])
-	bashfile.write('echo "${EXENAME}"\n')
-	bashfile.write('if [ -e "${EXENAME}" ]\n')
-	bashfile.write('then\n')
-	# bashfile.write('\tcd ${DEST_DIR}\n')
-	bashfile.write('\tfor bionrn in `seq 0 ${N_NEURONS}`; do\n')
-	bashfile.write('\t\techo "Submitting bioneuron training: ${bionrn} of ${N_NEURONS}"\n')
-	bashfile.write('\t\tpython /home/pduggins/bionengo/bioneuron_train.py ${bionrn} ${PARAMNAME}\n')
-	# bashfile.write('\t\tOUTFILE="output_bioneuron_${bionrn}.txt"\n')
-	# bashfile.write('\t\tsqsub -r ${RUNTIME} -q serial -o ${OUTFILE} ./${EXENAME} ${bionrn} ${PARAMNAME}\n')
+	bashfile.write('MEMORY=%s\n'%P['memory'])
+	bashfile.write('declare -a ID_FILESNAMES\n')
+	#for bionrn in range(P['atrb']['neurons']):
+		#bashfile.write('ID_FILENAMES[%s]=%s'%(bionrn,id_filenames[bionrn]))
+	bashfile.write('cd ${DEST_DIR}\n')
+	bashfile.write('for bionrn in `seq 0 ${N_NEURONS}`; do\n')
+	bashfile.write('\techo "Submitting bioneuron training: ${bionrn} of ${N_NEURONS}"\n')
+	bashfile.write('\tOUTFILE="output_bioneuron_${bionrn}.txt"\n')
+	bashfile.write('\tIDFILE="jobid_bioneuron_${bionrn}.txt"\n')
+	bashfile.write('\tsqsub -r ${RUNTIME} -q serial -o ${OUTFILE} --idfile=${IDFILE} --mpp=${MEMORY} /home/psipeter/bionengo/sqsub_train.py  ${bionrn} ${PARAMNAME}\n')
 	bashfile.write('\tdone;\n')
-	bashfile.write('else\n')
-	bashfile.write('\techo "could not find the above executable"\n')
-	bashfile.write('fi\n')
 	bashfile.close()
 	st = os.stat(bashfilename)
 	os.chmod(bashfilename, st.st_mode | stat.S_IEXEC)
 	subprocess.call(bashfilename,shell=True)
+	sqjobs_list=[]
+	for bionrn in range(P['atrb']['neurons']):
+		with open('jobid_bioneuron_%s.txt'%bionrn,'r') as file:
+			jobid=int(file.read().splitlines()[0])
+			sqjobs_list.append(jobid)
 
-	#create and save a list of the eval_number associated with the minimum loss for each bioneuron
-	best_hyperparam_files, rates_bio, best_losses, all_losses = [], [], [], []
-	for b in range(P['atrb']['neurons']):
-		bionrn=np.load('output_bioneuron_%s.npz'%b)['bionrn']
-		eval_number=np.load('output_bioneuron_%s.npz'%b)['eval']
-		losses=np.load('output_bioneuron_%s.npz'%b)['losses']
-		best_hyperparam_files.append(P['directory']+P['atrb']['label']+'/eval_%s_bioneuron_%s'%(eval_number,bionrn))
-		spikes_rates_bio_ideal=np.load(best_hyperparam_files[-1]+'/spikes_rates_bio_ideal.npz')
-		best_losses.append(np.load(best_hyperparam_files[-1]+'/loss.npz')['loss'])
-		rates_bio.append(spikes_rates_bio_ideal['rates_bio'])
-		all_losses.append(losses)
-	rates_bio=np.array(rates_bio).T
-	os.chdir(P['directory']+P['atrb']['label'])
-	target=np.load('output_ideal_%s.npz'%P['atrb']['label'])['values']
-	#delete files not in best_hyperparam_files
-	delete_extra_hyperparam_files(P,best_hyperparam_files)
-	#plot the spikes and rates of the best run
-	plot_spikes_rates_voltage_train(P,best_hyperparam_files,target,np.array(best_losses))
-	plot_hyperopt_loss(P,np.array(all_losses))
-	np.savez('best_hyperparam_files.npz',best_hyperparam_files=best_hyperparam_files)
-	return best_hyperparam_files,target,rates_bio
-
-
-def main(): #called by bash_bioneuron_train.sh, results sent to OUTPUT_bioneuron_X.txt
-	bionrn=int(sys.argv[1])
-	param_name=sys.argv[2]
-	with open(param_name,'r') as file:
-		P=json.load(file)
-	rng=np.random.RandomState(seed=P['hyperopt_seed']+P['atrb']['seed']+bionrn)
-	if P['decompose_weights']==True:
-		if P['single_encoder']==True: P_hyperopt=make_hyperopt_space_decomposed_weights_single_encoder(P,bionrn,rng)
-		else: P_hyperopt=make_hyperopt_space_decomposed_weights(P,bionrn,rng)
-	else: P_hyperopt=make_hyperopt_space(P,bionrn,rng)
-	results=run_hyperopt(P_hyperopt)
-	np.savez('output_bioneuron_%s.npz'%bionrn,bionrn=results[0],eval=results[1],losses=results[2])
-	return results
-
-
-if __name__ == "__main__":
-   main()
+	#make a bash script to collect the output files from the first sqjobs
+	#only submit when previous sqjobs have finished
+	sqjobs_string=[','.join(str(x) for x in sqjobs_list)][0]
+	bashfilename='/home/psipeter/.local/bin/bash/bash_collect_train.sh'
+	bashfile=open(bashfilename,'w')
+	bashfile.write('DEST_DIR=%s\n'%(P['directory']+P['atrb']['label']))
+        bashfile.write('PARAMNAME=%s\n'%param_name)
+       # bashfile.write('N_NEURONS=%s\n'%P['atrb']['neurons'])
+        bashfile.write('RUNTIME=%s\n'%P['runtime'])
+        bashfile.write('MEMORY=%s\n'%P['memory'])
+        #bashfile.write('SQJOBS=%s\n'%sqjobs_list)
+	bashfile.write('cd ${DEST_DIR}\n')
+        bashfile.write('echo "Submitting collection job, waiting for training..."\n')
+        bashfile.write('OUTFILE="output_collection.txt"\n')
+        bashfile.write('sqsub -r ${RUNTIME} -q serial -o ${OUTFILE} -w %s --mpp=${MEMORY} /home/psipeter/bionengo/sqsub_collect.py ${PARAMNAME}\n'%sqjobs_string)
+        bashfile.write('done;\n')
+        bashfile.close()
+        st = os.stat(bashfilename)
+        os.chmod(bashfilename, st.st_mode | stat.S_IEXEC)
+        subprocess.call(bashfilename,shell=True)
+	return

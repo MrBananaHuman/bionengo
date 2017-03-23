@@ -10,9 +10,10 @@ import seaborn as sns
 from nengo.utils.matplotlib import rasterplot
 import ipdb
 
-def ch_dir():
+def ch_dir(P):
 	#change directory for data and plot outputs
-	root=os.getcwd()
+	if P['platform'] == 'workstation': root=os.getcwd()
+	elif P['platform'] == 'sharcnet': root='/work/psipeter/bionengo'
 	def make_addon(N):
 		addon=str(''.join(random.choice(string.ascii_uppercase+string.digits) for _ in range(N)))
 		return addon
