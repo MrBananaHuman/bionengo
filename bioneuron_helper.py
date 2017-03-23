@@ -218,10 +218,15 @@ def load_hyperparams(P_in):
 	print 'Loading connections into %s' %P['atrb']['label']
 	os.chdir(P['directory']+P['atrb']['label'])
 	rates_bio=[]
+	best_losses=[]
 	best_hyperparam_files=np.load('best_hyperparam_files.npz')['best_hyperparam_files']
-	for file in best_hyperparam_files:
-		spikes_rates_bio_ideal=np.load(file+'/spikes_rates_bio_ideal.npz')
+	for hyperparam_file in best_hyperparam_files:
+		spikes_rates_bio_ideal=np.load(hyperparam_file+'/spikes_rates_bio_ideal.npz')
+		best_losses.append(np.load(hyperparam_file+'/loss.npz')['loss'])
 		rates_bio.append(spikes_rates_bio_ideal['rates_bio'])
 	rates_bio=np.array(rates_bio).T
 	target_signal=np.load('output_ideal_%s.npz'%P['atrb']['label'])['values']
+	if P['platform']=='workstation':
+		plot_spikes_rates_voltage_train(P,best_hyperparam_files,target_signal,np.array(best_losses))
+		#plot_hyperopt_loss(P,np.array(all_losses))
 	return best_hyperparam_files,target_signal,rates_bio

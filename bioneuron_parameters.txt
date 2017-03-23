@@ -8,7 +8,7 @@
 	'pre':{'n_neurons':100,'n_syn':5,'dim':1,'seed':33,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':1},
 	'pre2':{'n_neurons':100,'n_syn':5,'dim':1,'seed':33,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':1},
 	'pre3':{'n_neurons':100,'n_syn':5,'dim':1,'seed':33,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':1},
-	'ens_bio':{'n_neurons':10,'n_syn':5,'dim':1,'seed':66,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':10},
+	'ens_bio':{'n_neurons':10,'n_syn':5,'dim':1,'seed':66,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':100},
 	'ens_bio2':{'n_neurons':10,'n_syn':5,'dim':1,'seed':99,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':10},
 	'ens_bio3':{'n_neurons':30,'n_syn':5,'dim':1,'seed':99,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':30},
 	'ens_bio4':{'n_neurons':30,'n_syn':5,'dim':1,'seed':99,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':30},
@@ -52,7 +52,8 @@
 	'transform_ens4_to_ens5':0.75,
 
 	### LOAD ###
-	'continue_optimization':False, 
+	'continue_optimization':True, 
+	'directory':'/work/psipeter/bionengo/data/MBZL1TC8X/', #work test
 	#'directory':'/home/pduggins/bionengo/data/2HZVIGYV8/', #integrator, weight_scaled, 50 neurons, 200 evals, 10s, e0 0.0001, single encoder
 	#'directory':'/home/pduggins/bionengo/data/VYX6Z61FQ/', #integrator, weight_scaled, 50 neurons, 200 evals, 30s, e0 0.0001, 
 	#'directory':'/home/pduggins/bionengo/data/1CDAORV3P/', #integrator, weight_scaled, 50 neurons, 200 evals, decompose, e0 0.0001, WORKS! 

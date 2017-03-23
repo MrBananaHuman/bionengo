@@ -199,9 +199,9 @@ def main():
 		rmse_bio=np.sqrt(np.average((sim.data[probe_dir]-sim.data[probe_bio])**2))
 		rmse_lif=np.sqrt(np.average((sim.data[probe_dir]-sim.data[probe_lif])**2))
 		file=open('rmse_decode.txt','w')
-		file.write('rmse_decode_bio')
+		file.write('rmse_decode_bio=')
 		file.write(str(rmse_bio))
-		file.write('rmse_decode_lif')
+		file.write('\nrmse_decode_lif=')
 		file.write(str(rmse_lif))
 		file.close()
 
@@ -213,7 +213,7 @@ def main():
 						for nrn in range(sim.data[probe_lif_spikes].shape[1])]).T
 		rmse_rates=np.sqrt(np.average((bio_rates-lif_rates)**2))
 		file=open('rmse_test.txt','w')
-		file.write('rmse_test_bio')
+		file.write('rmse_test_bio=')
 		file.write(str(rmse_rates))
 		file.close()
 

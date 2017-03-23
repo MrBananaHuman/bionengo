@@ -26,16 +26,16 @@ class BahlNeuron(nengo.neurons.NeuronType):
 		self.inputs={}
 
 	def create(self,bio_idx):
-		return self.Bahl(bio_idx)
+		return self.Bahl(bio_idx,self.P['platform'])
 
 	class Bahl():
 		import numpy as np
 		import neuron
 		from synapses import ExpSyn
 		import os
-		def __init__(self,bio_idx):
-			if P['platform']=='workstation']:  neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc') #todo: hardcoded path
-			elif P['platform']=='sharcnet': neuron.h.load_file('/home/psipeter/bionengo/NEURON_models/bahl.hoc') #todo: hardcoded path
+		def __init__(self,bio_idx,platform):
+			if platform=='workstation':  neuron.h.load_file('/home/pduggins/bionengo/bahl.hoc') #todo: hardcoded path
+			elif platform=='sharcnet': neuron.h.load_file('/home/psipeter/bionengo/NEURON_models/bahl.hoc') #todo: hardcoded path
 			self.bio_idx=bio_idx
 			self.bias = None
 			self.synapses = {}
@@ -363,8 +363,8 @@ def optimize_bioensembles(network):
 		if ens.neuron_type.best_hyperparam_files != None and P['continue_optimization']==False:
 			best_hyperparam_files, targets, activities = load_hyperparams(P) #don't train if filenames already exists
 		else: 
-			if P['platform']=='workstation']:best_hyperparam_files, targets, activities = train_hyperparams(P)
-			elif P['platform']=='sharcnet']:
+			if P['platform']=='workstation':best_hyperparam_files, targets, activities = train_hyperparams(P)
+			elif P['platform']=='sharcnet':
 				train_hyperparams_serial_farming(P)
 				directory=P['directory']+P['atrb']['label']+'/'
 				#wait until the necessary files have been generated
