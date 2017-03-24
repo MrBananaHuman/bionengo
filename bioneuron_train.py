@@ -212,24 +212,14 @@ def run_bioneuron_event_based(P,bioneuron,all_spikes_pre):
 
 def simulate(P):
 	os.chdir(P['directory']+P['atrb']['label'])
-	print 'load spikes'
 	all_spikes_pre,all_spikes_ideal=load_spikes(P)
 	spikes_ideal=all_spikes_ideal[:,P['hyperopt']['bionrn']]
-	print 'load hyperopt'
 	weights,locations,bias=load_hyperopt_space(P)
-	print 'create bioneuron'
 	bioneuron=create_bioneuron(P,weights,locations,bias)
-	print 'run bioneuron'
 	run_bioneuron_event_based(P,bioneuron,all_spikes_pre)
-	print 'filter spikes'
 	spikes_bio,spikes_ideal,rates_bio,rates_ideal,voltages=filter_spikes_2(P,bioneuron,spikes_ideal)
-	# spikes_bio2,spikes_ideal2,rates_bio2,rates_ideal2,voltages2=filter_spikes_2(P,bioneuron,spikes_ideal)
 	loss=compute_loss(P,spikes_bio, spikes_ideal, rates_bio,rates_ideal,voltages)
-	print 'export data'
 	export_data(P,weights,locations,bias,spikes_bio,spikes_ideal,rates_bio,rates_ideal,voltages,loss)
-	# print P['atrb']['label'], 'neuron', P['hyperopt']['bionrn'], 'loss', loss
-	# for key in weights.iterkeys():
-	# 	print key, np.average(weights[key]), np.average(locations[key])
 	return {'loss': loss, 'eval':P['current_eval'], 'status': hyperopt.STATUS_OK}
 
 def run_hyperopt(P):
