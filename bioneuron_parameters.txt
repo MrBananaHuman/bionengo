@@ -1,6 +1,6 @@
 {
 	### PLATFORM ###
-	'platform':'workstation',
+	'platform':'sharcnet',
 
 	### NENGO ###
 	'dt_nengo':0.001, #change in optimize too
@@ -8,8 +8,8 @@
 	'pre':{'n_neurons':100,'n_syn':5,'dim':1,'seed':33,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':1},
 	'pre2':{'n_neurons':100,'n_syn':5,'dim':1,'seed':33,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':1},
 	'pre3':{'n_neurons':100,'n_syn':5,'dim':1,'seed':33,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':1},
-	'ens_bio':{'n_neurons':10,'n_syn':5,'dim':1,'seed':66,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':100},
-	'ens_bio2':{'n_neurons':10,'n_syn':5,'dim':1,'seed':99,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':10},
+	'ens_bio':{'n_neurons':50,'n_syn':5,'dim':1,'seed':66,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':500},
+	'ens_bio2':{'n_neurons':10,'n_syn':5,'dim':1,'seed':99,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':100},
 	'ens_bio3':{'n_neurons':30,'n_syn':5,'dim':1,'seed':99,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':30},
 	'ens_bio4':{'n_neurons':30,'n_syn':5,'dim':1,'seed':99,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':30},
 	'ens_bio5':{'n_neurons':30,'n_syn':5,'dim':1,'seed':99,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':30},
@@ -27,8 +27,8 @@
 	'b_0':1.0, #1.0
 	'synapse_type':'ExpSyn',
 	'n_seg': 5,
-	'runtime':'1h',
-	'memory':'1G',	
+	'runtime':'18h',
+	'memory':'2G',	
 	'n_nodes':10,
 	'spikes_train':'ideal', #use spiking output of pre_bio vs. pre_lif to train next ens
 	'decoder_train':'load', #calculate decoders: _system 'load', 'simulate'; _old 'bio' vs 'ideal'
@@ -53,19 +53,6 @@
 
 	### LOAD ###
 	'continue_optimization':False, 
-	'directory':'/home/pduggins/bionengo/data/MBZL1TC8X/', #work test
-	#'directory':'/home/pduggins/bionengo/data/2HZVIGYV8/', #integrator, weight_scaled, 50 neurons, 200 evals, 10s, e0 0.0001, single encoder
-	#'directory':'/home/pduggins/bionengo/data/VYX6Z61FQ/', #integrator, weight_scaled, 50 neurons, 200 evals, 30s, e0 0.0001, 
-	#'directory':'/home/pduggins/bionengo/data/1CDAORV3P/', #integrator, weight_scaled, 50 neurons, 200 evals, decompose, e0 0.0001, WORKS! 
-	#'directory':'/home/pduggins/bionengo/data/I4AKBM0RP/', #integrator 100evals, 10 neurons, decompose, dt 0.0001
-	#'directory':'/home/pduggins/bionengo/data/HOBK0II7T/', #integrator TYYOTFPIZ=1000evals, 10 neurons, decompose, 50 synapses
-	#'directory':'/home/pduggins/bionengo/data/TYYOTFPIZ/', #integrator TYYOTFPIZ=1000evals, 10 neurons, decompose, 
-	#'directory':'/home/pduggins/bionengo/data/FA5I37WTH/', #test feedforward
-	#'directory':'/home/pduggins/bionengo/data/4M5ID32QY/', #integrator 100,30 nrns 200,100 evals equalpower 10s decompose
-	#'directory':'/home/pduggins/bionengo/data/TVADKQ7BS/', #feedforward 30 nrns 100 evals equalpower decompose
-	#'directory':'/home/pduggins/bionengo/data/T2PXU46VN/', #100,10 evals 100,30 nrns T=0.05,1.0 tau=0.05 equalpower, no bias, loss trick2, decompose
-	#'directory':'/home/pduggins/bionengo/data/HCEU7TI79/', #400(1000),10 evals 30,2 nrns T=0.05,1.0 tau=0.05 equalpower, no bias, loss trick2, no_decompose
-
 
 	### SIGNALS ###
 	'train': 
