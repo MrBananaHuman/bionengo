@@ -231,7 +231,8 @@ def load_hyperparams(P_in):
 		rates_bio.append(spikes_rates_bio_ideal['rates_bio'])
 	rates_bio=np.array(rates_bio).T
 	target_signal=np.load('output_ideal_%s.npz'%P['atrb']['label'])['values']
+	all_losses=np.load('all_losses.npz')['losses']
 	if P['platform']=='workstation':
 		plot_spikes_rates_voltage_train(P,best_hyperparam_files,target_signal,np.array(best_losses))
-		#plot_hyperopt_loss(P,np.array(all_losses))
+		plot_hyperopt_loss(P,np.array(all_losses))
 	return best_hyperparam_files,target_signal,rates_bio

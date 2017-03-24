@@ -31,6 +31,7 @@ def main():
         np.savez('best_hyperparam_files.npz',best_hyperparam_files=best_hyperparam_files)
         np.savez('target.npz',target=target)
 	np.savez('rates_bio.npz',rates_bio=rates_bio)
+	np.savez('all_losses.npz',losses=np.array(all_losses))
 	spikes_bio=[]
 	spikes_ideal=[]
 	rates_bio=[]
