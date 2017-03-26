@@ -18,13 +18,15 @@ import gc
 import pickle
 from synapses import ExpSyn
 import subprocess
+from pathos.multiprocessing import ProcessingPool as Pool
 from bioneuron_helper import ch_dir, make_signal, load_spikes, load_values, filter_spikes,\
 		filter_spikes_2, export_data, plot_spikes_rates_voltage_train,\
 		plot_hyperopt_loss, delete_extra_hyperparam_files
 
 class Bahl():
 	def __init__(self,P):
-		neuron.h.load_file('/home/psipeter/bionengo/NEURON_models/bahl.hoc')
+		if P['platform'] == 'workstation': neuron.h.load_file('/home/pduggins/bionengo/NEURON_models/bahl.hoc')
+		elif P['platform'] == 'sharcnet': neuron.h.load_file('/home/psipeter/bionengo/NEURON_models/bahl.hoc')
 		self.cell = neuron.h.Bahl()
 		self.synapses={}
 		self.netcons={}
@@ -243,7 +245,7 @@ def run_hyperopt(P):
 		print 'Connections into %s, bioneuron %s, hyperopt %s%%'\
 			%(P['atrb']['label'],P['hyperopt']['bionrn'],100.0*(t+1)/P['atrb']['evals'])
 		#save trials object for checkpoints / continued training later
-		if t % int(P['atrb']['evals']/3) == 0 and P['save_hyperopt_trials'] == True:
+		if t % int(P['atrb']['evals']/10) == 0 and P['save_hyperopt_trials'] == True:
 			pickle.dump(trials,open('bioneuron_%s_hyperopt_trials.p'%P['hyperopt']['bionrn'],'wb'))
 	#find best run's directory location
 	losses=[t['result']['loss'] for t in trials]
@@ -270,10 +272,10 @@ def train_hyperparams(P):
 		P_list.append(P_hyperopt)
 	results=pool.map(run_hyperopt,P_list)
 	# pool.terminate()
-	#create and save a list of the eval_number associated with the minimum loss for each bioneuron
+	#create and save a list of the folder containing info for the best eval for each bioneuron
 	best_hyperparam_files, rates_bio, best_losses, all_losses = [], [], [], []
 	for bionrn in range(len(results)):
-		best_hyperparam_files.append(P['directory']+P['atrb']['label']+'/eval_%s_bioneuron_%s'%(results[bionrn][1],bionrn))
+		best_hyperparam_files.append(P['directory']+P['atrb']['label']+'/bioneuron_%s'%bionrn)
 		spikes_rates_bio_ideal=np.load(best_hyperparam_files[-1]+'/spikes_rates_bio_ideal.npz')
 		best_losses.append(np.load(best_hyperparam_files[-1]+'/loss.npz')['loss'])
 		rates_bio.append(spikes_rates_bio_ideal['rates_bio'])

@@ -5,7 +5,7 @@ from bioneuron_helper import delete_extra_hyperparam_files
 import sys
 import json
 def main():
-	#create and save a list of the eval_number associated with the minimum loss for each bioneuron
+    #create and save a list of the folder containing info for the best eval for each bioneuron
         param_name=sys.argv[1]
         with open(param_name,'r') as file:
                 P=json.load(file)
@@ -15,7 +15,8 @@ def main():
                 bionrn=np.load('output_bioneuron_%s.npz'%b)['bionrn']
                 eval_number=np.load('output_bioneuron_%s.npz'%b)['eval']
                 losses=np.load('output_bioneuron_%s.npz'%b)['losses']
-                best_hyperparam_files.append(P['directory']+P['atrb']['label']+'/eval_%s_bioneuron_%s'%(eval_number,bionrn))
+                best_hyperparam_files.append(P['directory']+P['atrb']['label']+'/bioneuron_%s'%bionrn)
+                # best_hyperparam_files.append(P['directory']+P['atrb']['label']+'/eval_%s_bioneuron_%s'%(eval_number,bionrn))
                 spikes_rates_bio_ideal=np.load(best_hyperparam_files[-1]+'/spikes_rates_bio_ideal.npz')
                 best_losses.append(np.load(best_hyperparam_files[-1]+'/loss.npz')['loss'])
                 rates_bio.append(spikes_rates_bio_ideal['rates_bio'])

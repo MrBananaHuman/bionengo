@@ -118,21 +118,38 @@ def filter_spikes_2(P,bioneuron,spikes_ideal):
 	return spikes_bio,spikes_ideal,rates_bio,rates_ideal,voltages	
 
 def export_data(P,weights,locations,bias,spikes_bio,spikes_ideal,rates_bio,rates_ideal,voltages,loss):
-	try:
-		os.makedirs('eval_%s_bioneuron_%s'%(P['current_eval'],P['hyperopt']['bionrn']))
-		os.chdir('eval_%s_bioneuron_%s'%(P['current_eval'],P['hyperopt']['bionrn']))
-	except OSError:
-		os.chdir('eval_%s_bioneuron_%s'%(P['current_eval'],P['hyperopt']['bionrn']))
-	np.savez('bias.npz',bias=bias)
-	np.savez('loss.npz',loss=loss)
-	#spikes_ideal and rates_ideal are redundant (saved in pre_build_func()), but makes loading easier
-	np.savez('spikes_rates_bio_ideal.npz',
-				spikes_bio=spikes_bio,spikes_ideal=spikes_ideal,
-				rates_bio=rates_bio,rates_ideal=rates_ideal,voltages=voltages)
-	for inpt in P['inpts'].iterkeys():
-		np.savez('%s_weights.npz'%inpt,weights=weights[inpt])
-		np.savez('%s_locations.npz'%inpt,locations=locations[inpt])
+	try: 
+		os.chdir('bioneuron_%s'%P['hyperopt']['bionrn'])
+		current_best_loss=np.load('loss.npz')['loss']
+		if loss < current_best_loss: #new best evaluation
+			np.savez('bias.npz',bias=bias)
+			np.savez('loss.npz',loss=loss)
+			#spikes_ideal and rates_ideal are redundant (saved in pre_build_func()), but makes loading easier
+			np.savez('spikes_rates_bio_ideal.npz',
+						spikes_bio=spikes_bio,spikes_ideal=spikes_ideal,
+						rates_bio=rates_bio,rates_ideal=rates_ideal,voltages=voltages)
+			for inpt in P['inpts'].iterkeys():
+				np.savez('%s_weights.npz'%inpt,weights=weights[inpt])
+				np.savez('%s_locations.npz'%inpt,locations=locations[inpt])
+	except OSError: #first evaluation
+		os.makedirs('bioneuron_%s'%P['hyperopt']['bionrn'])
+		os.chdir('bioneuron_%s'%P['hyperopt']['bionrn'])
+		np.savez('bias.npz',bias=bias)
+		np.savez('loss.npz',loss=loss)
+		#spikes_ideal and rates_ideal are redundant (saved in pre_build_func()), but makes loading easier
+		np.savez('spikes_rates_bio_ideal.npz',
+					spikes_bio=spikes_bio,spikes_ideal=spikes_ideal,
+					rates_bio=rates_bio,rates_ideal=rates_ideal,voltages=voltages)
+		for inpt in P['inpts'].iterkeys():
+			np.savez('%s_weights.npz'%inpt,weights=weights[inpt])
+			np.savez('%s_locations.npz'%inpt,locations=locations[inpt])
 	os.chdir('..')
+	# try:
+	# 	os.makedirs('eval_%s_bioneuron_%s'%(P['current_eval'],P['hyperopt']['bionrn']))
+	# 	os.chdir('eval_%s_bioneuron_%s'%(P['current_eval'],P['hyperopt']['bionrn']))
+	# except OSError:
+	# 	os.chdir('eval_%s_bioneuron_%s'%(P['current_eval'],P['hyperopt']['bionrn']))
+
 
 def delete_extra_hyperparam_files(P,best_hyperparam_files):
 	from os import listdir
