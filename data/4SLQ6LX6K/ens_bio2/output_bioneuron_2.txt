@@ -1,0 +1,58 @@
+NEURON -- Release 7.4 (1370:16a7055d4a86) 2015-11-09
+Duke, Yale, and the BlueBrain Project -- Copyright 1984-2015
+See http://www.neuron.yale.edu/neuron/credits
+
+:0: FutureWarning: IPython widgets are experimental and may change in the future.
+Additional mechanisms from files
+ cad.mod h.mod IKM.mod kca.mod kfast.mod kslow.mod nap.mod nat.mod SlowCa.mod
+	1 
+Connections into ens_bio2, bioneuron 2, hyperopt 2.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 4.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 6.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 8.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 10.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 12.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 14.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 16.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 18.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 20.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 22.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 24.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 26.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 28.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 30.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 32.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 34.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 36.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 38.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 40.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 42.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 44.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 46.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 48.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 50.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 52.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 54.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 56.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 58.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 60.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 62.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 64.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 66.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 68.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 70.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 72.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 74.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 76.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 78.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 80.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 82.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 84.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 86.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 88.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 90.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 92.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 94.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 96.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 98.0%
+Connections into ens_bio2, bioneuron 2, hyperopt 100.0%

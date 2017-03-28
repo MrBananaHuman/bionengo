@@ -11,3 +11,16 @@ WARNING: Job only used 4 % of its requested walltime.
 WARNING: Job only used 0 % of its requested cpu time.
 WARNING: Job only used 1 % of allocated cpu time.
 WARNING: Job only used 48% of its requested memory.
+:0: FutureWarning: IPython widgets are experimental and may change in the future.
+--- SharcNET Job Epilogue ---
+              job id: 9860305
+         exit status: 0
+            cpu time: 4s / 18.0h (0 %)
+        elapsed time: 31s / 18.0h (0 %)
+      virtual memory: 106.5M / 2.0G (5 %)
+
+Job completed successfully
+WARNING: Job only used 0 % of its requested walltime.
+WARNING: Job only used 0 % of its requested cpu time.
+WARNING: Job only used 12 % of allocated cpu time.
+WARNING: Job only used 5% of its requested memory.

@@ -117,3 +117,18 @@ Job completed successfully
 WARNING: Job only used 1 % of its requested walltime.
 WARNING: Job only used 1 % of its requested cpu time.
 WARNING: Job only used 54% of its requested memory.
+NEURON -- Release 7.4 (1370:16a7055d4a86) 2015-11-09
+Duke, Yale, and the BlueBrain Project -- Copyright 1984-2015
+See http://www.neuron.yale.edu/neuron/credits
+
+:0: FutureWarning: IPython widgets are experimental and may change in the future.
+--- SharcNET Job Epilogue ---
+              job id: 9860312
+         exit status: 0
+            cpu time: 4s / 18.0h (0 %)
+        elapsed time: 12s / 18.0h (0 %)
+
+Job completed successfully
+WARNING: Job only used 0 % of its requested walltime.
+WARNING: Job only used 0 % of its requested cpu time.
+WARNING: Job only used 33 % of allocated cpu time.

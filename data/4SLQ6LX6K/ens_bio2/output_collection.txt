@@ -1,0 +1,13 @@
+:0: FutureWarning: IPython widgets are experimental and may change in the future.
+--- SharcNET Job Epilogue ---
+              job id: 9885928
+         exit status: 0
+            cpu time: 8s / 24.0h (0 %)
+        elapsed time: 22s / 24.0h (0 %)
+      virtual memory: 864.7M / 2.0G (42 %)
+
+Job completed successfully
+WARNING: Job only used 0 % of its requested walltime.
+WARNING: Job only used 0 % of its requested cpu time.
+WARNING: Job only used 36 % of allocated cpu time.
+WARNING: Job only used 42% of its requested memory.

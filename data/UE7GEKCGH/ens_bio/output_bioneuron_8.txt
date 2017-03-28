@@ -517,3 +517,27 @@ Job completed successfully
 WARNING: Job only used 19 % of its requested walltime.
 WARNING: Job only used 18 % of its requested cpu time.
 WARNING: Job only used 68% of its requested memory.
+NEURON -- Release 7.4 (1370:16a7055d4a86) 2015-11-09
+Duke, Yale, and the BlueBrain Project -- Copyright 1984-2015
+See http://www.neuron.yale.edu/neuron/credits
+
+:0: FutureWarning: IPython widgets are experimental and may change in the future.
+Additional mechanisms from files
+ cad.mod h.mod IKM.mod kca.mod kfast.mod kslow.mod nap.mod nat.mod SlowCa.mod
+	1 
+Connections into ens_bio, bioneuron 8, hyperopt 99.2079207921%
+Connections into ens_bio, bioneuron 8, hyperopt 99.4059405941%
+Connections into ens_bio, bioneuron 8, hyperopt 99.603960396%
+Connections into ens_bio, bioneuron 8, hyperopt 99.801980198%
+Connections into ens_bio, bioneuron 8, hyperopt 100.0%
+--- SharcNET Job Epilogue ---
+              job id: 9860263
+         exit status: 0
+            cpu time: 182s / 18.0h (0 %)
+        elapsed time: 206s / 18.0h (0 %)
+      virtual memory: 1.3G / 2.0G (65 %)
+
+Job completed successfully
+WARNING: Job only used 0 % of its requested walltime.
+WARNING: Job only used 0 % of its requested cpu time.
+WARNING: Job only used 65% of its requested memory.
