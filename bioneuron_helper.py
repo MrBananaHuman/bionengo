@@ -62,12 +62,13 @@ def weight_rescale(location):
 	scaled_weight=1.0/f_voltage_att(location)
 	return scaled_weight
 
-def load_spikes(P):
+def load_inputs_ideal(P):
 	all_spikes_pre={}
 	for key in P['inpts'].iterkeys():
 		all_spikes_pre[key]=np.load('spikes_from_%s_to_%s.npz'%(key,P['atrb']['label']))['spikes']
+	input_current_ideal=np.load('input_current_ideal_%s.npz'%P['atrb']['label'])['input_current_ideal']
 	spikes_ideal=np.load('spikes_ideal_%s.npz'%P['atrb']['label'])['spikes']
-	return all_spikes_pre,spikes_ideal
+	return all_spikes_pre,spikes_ideal,input_current_ideal
 
 def load_values(P):
 	#loads decoded outputs of all pre ensembles
@@ -114,8 +115,9 @@ def filter_spikes_2(P,bioneuron,spikes_ideal):
 	spikes_ideal=spikes_ideal
 	rates_bio=lpf.filt(spikes_bio,dt=P['dt_nengo'])
 	rates_ideal=lpf.filt(spikes_ideal,dt=P['dt_nengo'])
+	current_bio=(np.array(bioneuron.v_apical_end)-np.array(bioneuron.v_soma_begin)) / bioneuron.ri_apical
 	voltages=np.array(bioneuron.v_record).ravel()
-	return spikes_bio,spikes_ideal,rates_bio,rates_ideal,voltages	
+	return spikes_bio,spikes_ideal,rates_bio,rates_ideal,current_bio,voltages
 
 def export_data(P,weights,locations,bias,spikes_bio,spikes_ideal,rates_bio,rates_ideal,voltages,loss):
 	try: 

@@ -19,7 +19,7 @@ import pickle
 from synapses import ExpSyn
 import subprocess
 from pathos.multiprocessing import ProcessingPool as Pool
-from bioneuron_helper import ch_dir, make_signal, load_spikes, load_values, filter_spikes,\
+from bioneuron_helper import ch_dir, make_signal, load_inputs_ideal, load_values, filter_spikes,\
 		filter_spikes_2, export_data, plot_spikes_rates_voltage_train,\
 		plot_hyperopt_loss, delete_extra_hyperparam_files
 
@@ -53,6 +53,12 @@ class Bahl():
 		self.t_record.record(neuron.h._ref_t)
 		self.spikes = neuron.h.Vector()
 		self.ap_counter.record(neuron.h.ref(self.spikes))
+		self.v_apical_end = neuron.h.Vector()
+		self.v_soma_begin = neuron.h.Vector()
+		self.ri_apical=self.cell.apical(0.001).ri()
+		self.v_apical_end.record(self.cell.apical(0.001)._ref_v)
+		self.v_soma_begin.record(self.cell.apical(0)._ref_v)
+		#input current to soma = voltage at end of apical dendrite - voltage at beginning of soma divided by its axial resistance
 	def event_step(self,t_neuron,inpt,pre):
 		for syn in self.synapses[inpt][pre]: #for each synapse in this connection
 			syn.spike_in.event(t_neuron) #add a spike at time (ms)
@@ -117,7 +123,7 @@ def make_hyperopt_space_decomposed_weights_single_encoder(P_in,bionrn,rng):
 	else: hyperparams['bias']=None
 	for inpt in P['inpts'].iterkeys():
 		decoders=np.load('decoders_from_%s_to_%s.npz'%(inpt,P['atrb']['label']))['decoders']
-		encoders=np.load('encoders_for_%s.npz'%P['atrb']['label'])['encoders'][bionrn]
+		encoders=np.load('encoders_%s.npz'%P['atrb']['label'])['encoders'][bionrn]
 		k_decoder=1.0/np.linalg.norm(decoders)
 		hyperparams[inpt]={}
 		hyperparams[inpt]['encoder']=encoders		
@@ -168,22 +174,22 @@ def create_bioneuron(P,weights,locations,bias):
 	bioneuron.start_recording()
 	return bioneuron	
 
-def compute_loss(P,spikes_bio, spikes_ideal, rates_bio,rates_ideal,voltages):
-	rmse=np.sqrt(np.average((rates_bio-rates_ideal)**2))
-	if P['complex_loss']==True:
-		t_total=len(voltages)
-		t_saturated=len(np.where((-40.0<voltages) & (voltages<-20.0))[0]) #when neurons burst initially then saturate, they settle around -40<V<-20
-		L_saturated=np.exp(10*t_saturated/t_total) #time spend in saturated regime exponentially increases loss (max e^10)
-		#L_startup2=5*np.sqrt(np.average((rates_bio[:100]-rates_ideal[:100])**2))
-		# print L_startup2
-		# t_startup=0
-		# for t in range(30): #first 50 timesteps
-		# 	# print t, spikes_bio[t], spikes_ideal[t]
-		# 	if spikes_bio[t] != spikes_ideal[t]: t_startup+=1
-		# L_startup=10*t_startup
-		# print L_startup
-		loss=rmse+L_saturated#+L_startup2
-	else:
+def compute_loss(P,spikes_bio,spikes_ideal,rates_bio,rates_ideal,current_bio,current_ideal,voltages):
+	if P['objective_function']=='spikes':
+		rmse=np.sqrt(np.average((rates_bio-rates_ideal)**2))
+		if P['complex_loss']==True:
+			t_total=len(voltages)
+			t_saturated=len(np.where((-40.0<voltages) & (voltages<-20.0))[0]) #when neurons burst initially then saturate, they settle around -40<V<-20
+			L_saturated=np.exp(10*t_saturated/t_total) #time spend in saturated regime exponentially increases loss (max e^10)
+			loss=rmse+L_saturated
+		else:
+			loss=rmse
+	elif P['objective_function']=='current':
+		#downsample the current_bio vector to account for differences in dt_nengo vs dt_neuron
+		ratio=int(P['dt_neuron']/P['dt_nengo'])
+		downsampled_current_bio=np.array([current_bio[t*ratio] for t in range(len(current_ideal))])
+		# ipdb.set_trace()
+		rmse=np.sqrt(np.average((downsampled_current_bio-current_ideal)**2))
 		loss=rmse
 	return loss
 
@@ -211,16 +217,19 @@ def run_bioneuron_event_based(P,bioneuron,all_spikes_pre):
 				if all_input_spikes[i][time][pre] > 0: #if input neuron spikes at time
 					bioneuron.event_step(t_neuron,inpts[i],pre)
 
+'''###############################################################################################################'''
+'''###############################################################################################################'''
 
 def simulate(P):
 	os.chdir(P['directory']+P['atrb']['label'])
-	all_spikes_pre,all_spikes_ideal=load_spikes(P)
+	all_spikes_pre,all_spikes_ideal,all_currents_ideal=load_inputs_ideal(P)
 	spikes_ideal=all_spikes_ideal[:,P['hyperopt']['bionrn']]
+	currents_ideal=all_currents_ideal[:,P['hyperopt']['bionrn']]
 	weights,locations,bias=load_hyperopt_space(P)
 	bioneuron=create_bioneuron(P,weights,locations,bias)
 	run_bioneuron_event_based(P,bioneuron,all_spikes_pre)
-	spikes_bio,spikes_ideal,rates_bio,rates_ideal,voltages=filter_spikes_2(P,bioneuron,spikes_ideal)
-	loss=compute_loss(P,spikes_bio, spikes_ideal, rates_bio,rates_ideal,voltages)
+	spikes_bio,spikes_ideal,rates_bio,rates_ideal,currents_bio,voltages=filter_spikes_2(P,bioneuron,spikes_ideal)
+	loss=compute_loss(P,spikes_bio,spikes_ideal,rates_bio,rates_ideal,currents_bio,currents_ideal,voltages)
 	export_data(P,weights,locations,bias,spikes_bio,spikes_ideal,rates_bio,rates_ideal,voltages,loss)
 	return {'loss': loss, 'eval':P['current_eval'], 'status': hyperopt.STATUS_OK}
 
@@ -257,6 +266,11 @@ def run_hyperopt(P):
 	#returns eval number with minimum loss for this bioneuron
 	return [P['hyperopt']['bionrn'],int(result),losses]
 
+
+'''###############################################################################################################'''
+'''###############################################################################################################'''
+
+
 def train_hyperparams(P):
 	print 'Training connections into %s' %P['atrb']['label']
 	os.chdir(P['directory']+P['atrb']['label']) #should be created in pre_build_func()
@@ -268,7 +282,7 @@ def train_hyperparams(P):
 			if P['single_encoder']==True: P_hyperopt=make_hyperopt_space_decomposed_weights_single_encoder(P,bionrn,rng)
 			else: P_hyperopt=make_hyperopt_space_decomposed_weights(P,bionrn,rng)
 		else: P_hyperopt=make_hyperopt_space(P,bionrn,rng)
-		# run_hyperopt(P_hyperopt)
+		# run_hyperopt(P_hyperopt) '''DEBUGGINs'''
 		P_list.append(P_hyperopt)
 	results=pool.map(run_hyperopt,P_list)
 	# pool.terminate()

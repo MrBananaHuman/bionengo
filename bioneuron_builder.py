@@ -55,6 +55,11 @@ class BahlNeuron(nengo.neurons.NeuronType):
 			self.t_record.record(neuron.h._ref_t)
 			self.spikes = neuron.h.Vector()
 			self.ap_counter.record(neuron.h.ref(self.spikes))
+			self.v_apical_end = neuron.h.Vector()
+			self.v_soma_begin = neuron.h.Vector()
+			self.ri_apical=self.cell.apical(0.001).ri()
+			self.v_apical_end.record(self.cell.apical(0.001)._ref_v)
+			self.v_soma_begin.record(self.cell.apical(0)._ref_v)
 			self.spikes_last=[]
 
 	def rates(self, x, gain, bias): #todo: remove this without errors
@@ -307,6 +312,10 @@ def pre_build_func(network,dt):
 				with lif_net: 
 					bio_dict[ens.label]['inputs'][conn.pre_obj.label]['probe_pre_spikes']=\
 							nengo.Probe(conn.pre_obj.neurons,'spikes')
+					#save xhat coming into ens in order to calculate the input current J
+					bio_dict[ens.label]['inputs'][conn.pre_obj.label]['probe_pre_output']=\
+							nengo.Probe(conn.pre_obj,solver=conn.solver,synapse=conn.synapse)
+
 
 	target_net=network.copy()
 	#replace all neurons in target_net with direct neurons to simulate target values (analytic solution)
@@ -335,6 +344,8 @@ def pre_build_func(network,dt):
 		except OSError:
 			os.chdir(bio)
 		bio_dict[bio]['encoders']=lif_sim.data[bio_dict[bio]['ensemble']].encoders
+		bio_dict[bio]['gains']=lif_sim.data[bio_dict[bio]['ensemble']].gain
+		bio_dict[bio]['biases']=lif_sim.data[bio_dict[bio]['ensemble']].bias
 		bio_dict[bio]['ideal_spikes']=lif_sim.data[bio_dict[bio]['probe_ideal_spikes']]
 		bio_dict[bio]['ideal_output']=target_sim.data[bio_dict[bio]['probe_ideal_output']]
 		for conn in lif_net.connections:
@@ -343,11 +354,25 @@ def pre_build_func(network,dt):
 		for inpt in bio_dict[bio]['inputs'].iterkeys():
 			bio_dict[bio]['inputs'][inpt]['pre_spikes']=\
 					lif_sim.data[bio_dict[bio]['inputs'][inpt]['probe_pre_spikes']]
+			bio_dict[bio]['inputs'][inpt]['pre_output']=\
+					lif_sim.data[bio_dict[bio]['inputs'][inpt]['probe_pre_output']]
 			np.savez('spikes_from_%s_to_%s.npz'%(inpt,bio),spikes=\
 					bio_dict[bio]['inputs'][inpt]['pre_spikes'])
 			np.savez('decoders_from_%s_to_%s.npz'%(inpt,bio),decoders=\
 					bio_dict[bio]['inputs'][inpt]['decoders'])
-		np.savez('encoders_for_%s.npz'%bio,encoders=bio_dict[bio]['encoders'])		
+
+		#J_input_{neuron=i} = np.dot(xhat,e_i)*alpha_i+bias_i
+		n_neurons=bio_dict[bio]['ensemble'].n_neurons
+		bio_dict[bio]['input_current_ideal']=np.zeros((n_neurons,len(lif_sim.trange())))
+		for nrn in range(n_neurons):
+			for inpt in bio_dict[bio]['inputs'].iterkeys():
+				bio_dict[bio]['input_current_ideal'][nrn]+=np.dot(
+						bio_dict[bio]['inputs'][inpt]['pre_output'],
+						bio_dict[bio]['encoders'][nrn])*\
+					bio_dict[bio]['gains'][nrn]+\
+					bio_dict[bio]['biases'][nrn]
+		np.savez('encoders_%s.npz'%bio,encoders=bio_dict[bio]['encoders'])		
+		np.savez('input_current_ideal_%s.npz'%bio,input_current_ideal=bio_dict[bio]['input_current_ideal'].T)		
 		np.savez('spikes_ideal_%s.npz'%bio,spikes=bio_dict[bio]['ideal_spikes'])
 		np.savez('output_ideal_%s.npz'%bio,values=bio_dict[bio]['ideal_output'])
 		os.chdir('..')

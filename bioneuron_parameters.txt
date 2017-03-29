@@ -1,6 +1,6 @@
 {
 	### PLATFORM ###
-	'platform':'sharcnet',
+	'platform':'workstation',
 
 	### NENGO ###
 	'dt_nengo':0.001, #change in optimize too
@@ -8,8 +8,8 @@
 	'pre':{'n_neurons':100,'n_syn':5,'dim':1,'seed':33,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':1},
 	'pre2':{'n_neurons':100,'n_syn':5,'dim':1,'seed':33,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':1},
 	'pre3':{'n_neurons':100,'n_syn':5,'dim':1,'seed':33,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':1},
-	'ens_bio':{'n_neurons':50,'n_syn':5,'dim':1,'seed':66,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':500},
-	'ens_bio2':{'n_neurons':10,'n_syn':5,'dim':1,'seed':99,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':100},
+	'ens_bio':{'n_neurons':10,'n_syn':5,'dim':1,'seed':66,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':30},
+	'ens_bio2':{'n_neurons':10,'n_syn':5,'dim':1,'seed':99,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':10},
 	'ens_bio3':{'n_neurons':30,'n_syn':5,'dim':1,'seed':99,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':30},
 	'ens_bio4':{'n_neurons':30,'n_syn':5,'dim':1,'seed':99,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':30},
 	'ens_bio5':{'n_neurons':30,'n_syn':5,'dim':1,'seed':99,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':30},
@@ -30,15 +30,16 @@
 	'runtime':'18h',
 	'memory':'2G',	
 	'n_nodes':10,
-	'spikes_train':'ideal', #use spiking output of pre_bio vs. pre_lif to train next ens
-	'decoder_train':'load', #calculate decoders: _system 'load', 'simulate'; _old 'bio' vs 'ideal'
-	'target_method':'direct', #use decoded 'LIF' output ('LIF'(spike) vs 'LIFRate') vs output of 'direct' ensembles as target signal for bioensemble decoders
-	'optimize_bias': False,
-	'optimize_locations':False,
-	'single_encoder': False,
-	'decompose_weights':True,
-	'complex_loss': True,
-	'save_hyperopt_trials':True,
+	'spikes_train':'ideal', 			#use spiking output of pre_bio vs. pre_lif to train next ens
+	'decoder_train':'load', 			#calculate decoders: _system 'load', 'simulate'; _old 'bio' vs 'ideal'
+	'target_method':'direct', 			#use decoded 'LIF' output vs output of 'direct' ensembles as target signal for bioensemble decoders
+	'optimize_bias': False, 			#include a bias current directly into the cell.soma(0.5) compartment
+	'optimize_locations':False, 		#optimize the locations of synapses on the apical dendrite
+	'single_encoder': False, 			#use a single encoder for the bioneuron, and optimize magnitude of synaptic weight - e_ij = z_i * e_j
+	'decompose_weights':True, 			#w_ij=d_i dot e_ij
+	'complex_loss': True, 				#special functions to keep neurons out of bad hyperparam regimes
+	'save_hyperopt_trials':True, 		#set True to allow continued training once simulation finishes (reccomended, fills hard drive faster)
+	'objective_function': 'current', 	#how to compute loss in the training algorith: 'spikes' or 'current'
 
 	### NETWORK ###
 	'transform_pre_to_ens':0.1,
@@ -53,14 +54,15 @@
 
 	### LOAD ###
 	'continue_optimization':False, 
+	#'directory': '/home/pduggins/bionengo/data/4SLQ6LX6K/',
 
 	### SIGNALS ###
 	'train': 
 		#{'type':'sinusoid','t_final':3.0,'dt':0.001,'dim':1,'omega':2},
-		{'type':'equalpower','t_final':10.0,'dt':0.001,'dim':1,'mean':0.0,'std':1.0,'max_freq':5.0,'seed':None},
+		{'type':'equalpower','t_final':1.0,'dt':0.001,'dim':1,'mean':0.0,'std':1.0,'max_freq':5.0,'seed':None},
 	'test':
 		#{'type':'sinusoid','t_final':3.0,'dt':0.001,'dim':1,'omega':2},
-		{'type':'equalpower','t_final':10.0,'dt':0.001,'dim':1,'mean':0.0,'std':1.0,'max_freq':5.0,'seed':111},
+		{'type':'equalpower','t_final':1.0,'dt':0.001,'dim':1,'mean':0.0,'std':1.0,'max_freq':5.0,'seed':111},
 	'test2':
 		#{'type':'sinusoid','t_final':3.0,'dt':0.001,'dim':1,'omega':2},
 		#{'type':'constant','t_final':3.0,'dt':0.001,'dim':1,'mean':0.5},
