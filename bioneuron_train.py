@@ -20,8 +20,7 @@ from synapses import ExpSyn
 import subprocess
 from pathos.multiprocessing import ProcessingPool as Pool
 from bioneuron_helper import ch_dir, make_signal, load_inputs_ideal, load_values, filter_spikes,\
-		filter_spikes_2, export_data, plot_spikes_rates_voltage_train,\
-		plot_hyperopt_loss, delete_extra_hyperparam_files
+		post_process_arrays, export_data, make_plots
 
 class Bahl():
 	def __init__(self,P):
@@ -174,7 +173,7 @@ def create_bioneuron(P,weights,locations,bias):
 	bioneuron.start_recording()
 	return bioneuron	
 
-def compute_loss(P,spikes_bio,spikes_ideal,rates_bio,rates_ideal,current_bio,current_ideal,voltages):
+def compute_loss(P,spikes_bio,spikes_ideal,rates_bio,rates_ideal,currents_bio,currents_ideal,voltages):
 	if P['objective_function']=='spikes':
 		rmse=np.sqrt(np.average((rates_bio-rates_ideal)**2))
 		if P['complex_loss']==True:
@@ -185,11 +184,7 @@ def compute_loss(P,spikes_bio,spikes_ideal,rates_bio,rates_ideal,current_bio,cur
 		else:
 			loss=rmse
 	elif P['objective_function']=='current':
-		#downsample the current_bio vector to account for differences in dt_nengo vs dt_neuron
-		ratio=int(P['dt_neuron']/P['dt_nengo'])
-		downsampled_current_bio=np.array([current_bio[t*ratio] for t in range(len(current_ideal))])
-		# ipdb.set_trace()
-		rmse=np.sqrt(np.average((downsampled_current_bio-current_ideal)**2))
+		rmse=np.sqrt(np.average((currents_bio-currents_ideal)**2))
 		loss=rmse
 	return loss
 
@@ -228,9 +223,9 @@ def simulate(P):
 	weights,locations,bias=load_hyperopt_space(P)
 	bioneuron=create_bioneuron(P,weights,locations,bias)
 	run_bioneuron_event_based(P,bioneuron,all_spikes_pre)
-	spikes_bio,spikes_ideal,rates_bio,rates_ideal,currents_bio,voltages=filter_spikes_2(P,bioneuron,spikes_ideal)
-	loss=compute_loss(P,spikes_bio,spikes_ideal,rates_bio,rates_ideal,currents_bio,currents_ideal,voltages)
-	export_data(P,weights,locations,bias,spikes_bio,spikes_ideal,rates_bio,rates_ideal,voltages,loss)
+	spikes_bio,spikes_ideal,rates_bio,rates_ideal,downsampled_currents_bio,voltages=post_process_arrays(P,bioneuron,spikes_ideal,currents_ideal)
+	loss=compute_loss(P,spikes_bio,spikes_ideal,rates_bio,rates_ideal,downsampled_currents_bio,currents_ideal,voltages)
+	export_data(P,weights,locations,bias,spikes_bio,spikes_ideal,rates_bio,rates_ideal,downsampled_currents_bio,currents_ideal,voltages,loss)
 	return {'loss': loss, 'eval':P['current_eval'], 'status': hyperopt.STATUS_OK}
 
 def run_hyperopt(P):
@@ -282,7 +277,7 @@ def train_hyperparams(P):
 			if P['single_encoder']==True: P_hyperopt=make_hyperopt_space_decomposed_weights_single_encoder(P,bionrn,rng)
 			else: P_hyperopt=make_hyperopt_space_decomposed_weights(P,bionrn,rng)
 		else: P_hyperopt=make_hyperopt_space(P,bionrn,rng)
-		# run_hyperopt(P_hyperopt) '''DEBUGGINs'''
+		# run_hyperopt(P_hyperopt) # DEBUGGINs
 		P_list.append(P_hyperopt)
 	results=pool.map(run_hyperopt,P_list)
 	# pool.terminate()
@@ -298,10 +293,9 @@ def train_hyperparams(P):
 	os.chdir(P['directory']+P['atrb']['label'])
 	target=np.load('output_ideal_%s.npz'%P['atrb']['label'])['values']
 	#delete files not in best_hyperparam_files
-	delete_extra_hyperparam_files(P,best_hyperparam_files)
+	# delete_extra_hyperparam_files(P,best_hyperparam_files)
 	#plot the spikes and rates of the best run
-	plot_spikes_rates_voltage_train(P,best_hyperparam_files,target,np.array(best_losses))
-	plot_hyperopt_loss(P,np.array(all_losses))
+	make_plots(P,best_hyperparam_files,target,np.array(best_losses),np.array(all_losses))
 	np.savez('best_hyperparam_files.npz',best_hyperparam_files=best_hyperparam_files)
 	return best_hyperparam_files,target,rates_bio
 

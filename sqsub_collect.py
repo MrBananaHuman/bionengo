@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import numpy as np
 import os
-from bioneuron_helper import delete_extra_hyperparam_files
 import sys
 import json
 def main():
@@ -24,11 +23,6 @@ def main():
         rates_bio=np.array(rates_bio).T
         os.chdir(P['directory']+P['atrb']['label'])
         target=np.load('output_ideal_%s.npz'%P['atrb']['label'])['values']
-        #delete files not in best_hyperparam_files
-        delete_extra_hyperparam_files(P,best_hyperparam_files)
-        #plot the spikes and rates of the best run
-        #plot_spikes_rates_voltage_train(P,best_hyperparam_files,target,np.array(best_losses))
-        #plot_hyperopt_loss(P,np.array(all_losses))
         np.savez('best_hyperparam_files.npz',best_hyperparam_files=best_hyperparam_files)
         np.savez('target.npz',target=target)
 	np.savez('rates_bio.npz',rates_bio=rates_bio)

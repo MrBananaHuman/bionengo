@@ -97,7 +97,8 @@ def filter_spikes(P,bioneuron,spikes_ideal):
 	voltages=np.array(bioneuron.v_record).ravel()
 	return spikes_bio,spikes_ideal,rates_bio,rates_ideal,voltages
 
-def filter_spikes_2(P,bioneuron,spikes_ideal):
+def post_process_arrays(P,bioneuron,spikes_ideal,currents_ideal):
+	#filters spikes and downsamples currents so that loss can be computed on rates and/or currents
 	#make as similar to the make_step method in bioneuron_builder as possible
 	lpf=nengo.Lowpass(P['kernel']['tau'])
 	timesteps=np.arange(0,P['train']['t_final'],P['dt_nengo'])
@@ -115,11 +116,22 @@ def filter_spikes_2(P,bioneuron,spikes_ideal):
 	spikes_ideal=spikes_ideal
 	rates_bio=lpf.filt(spikes_bio,dt=P['dt_nengo'])
 	rates_ideal=lpf.filt(spikes_ideal,dt=P['dt_nengo'])
-	current_bio=(np.array(bioneuron.v_apical_end)-np.array(bioneuron.v_soma_begin)) / bioneuron.ri_apical
-	voltages=np.array(bioneuron.v_record).ravel()
-	return spikes_bio,spikes_ideal,rates_bio,rates_ideal,current_bio,voltages
 
-def export_data(P,weights,locations,bias,spikes_bio,spikes_ideal,rates_bio,rates_ideal,voltages,loss):
+	currents_bio=(np.array(bioneuron.v_apical_end)-np.array(bioneuron.v_soma_begin)) / bioneuron.ri_apical #(v_dend - v_soma)/R_dend
+	# currents_bio=np.array(bioneuron.v_apical_end) / bioneuron.ri_apical #v_dend/R_dend
+	
+	#downsample the currents_bio vector to account for differences in dt_nengo vs dt_neuron
+	ratio=int(P['dt_nengo']/P['dt_neuron'])
+	currents_bio_filled=np.zeros((ratio*currents_ideal.shape[0]))
+	currents_bio_filled[:currents_bio.shape[0]]=currents_bio
+	current_bio_reshaped=currents_bio_filled.reshape(-1,ratio)
+	downsampled_currents_bio=np.mean(current_bio_reshaped,axis=1)
+	voltages=np.array(bioneuron.v_record).ravel()
+
+	return spikes_bio,spikes_ideal,rates_bio,rates_ideal,downsampled_currents_bio,voltages
+
+def export_data(P,weights,locations,bias,spikes_bio,spikes_ideal,
+				rates_bio,rates_ideal,currents_bio,currents_ideal,voltages,loss):
 	try: 
 		os.chdir('bioneuron_%s'%P['hyperopt']['bionrn'])
 		current_best_loss=np.load('loss.npz')['loss']
@@ -129,7 +141,9 @@ def export_data(P,weights,locations,bias,spikes_bio,spikes_ideal,rates_bio,rates
 			#spikes_ideal and rates_ideal are redundant (saved in pre_build_func()), but makes loading easier
 			np.savez('spikes_rates_bio_ideal.npz',
 						spikes_bio=spikes_bio,spikes_ideal=spikes_ideal,
-						rates_bio=rates_bio,rates_ideal=rates_ideal,voltages=voltages)
+						rates_bio=rates_bio,rates_ideal=rates_ideal,
+						currents_bio=currents_bio,currents_ideal=currents_ideal,
+						voltages=voltages)
 			for inpt in P['inpts'].iterkeys():
 				np.savez('%s_weights.npz'%inpt,weights=weights[inpt])
 				np.savez('%s_locations.npz'%inpt,locations=locations[inpt])
@@ -141,7 +155,9 @@ def export_data(P,weights,locations,bias,spikes_bio,spikes_ideal,rates_bio,rates
 		#spikes_ideal and rates_ideal are redundant (saved in pre_build_func()), but makes loading easier
 		np.savez('spikes_rates_bio_ideal.npz',
 					spikes_bio=spikes_bio,spikes_ideal=spikes_ideal,
-					rates_bio=rates_bio,rates_ideal=rates_ideal,voltages=voltages)
+					rates_bio=rates_bio,rates_ideal=rates_ideal,
+					currents_bio=currents_bio,currents_ideal=currents_ideal,
+					voltages=voltages)
 		for inpt in P['inpts'].iterkeys():
 			np.savez('%s_weights.npz'%inpt,weights=weights[inpt])
 			np.savez('%s_locations.npz'%inpt,locations=locations[inpt])
@@ -153,19 +169,22 @@ def export_data(P,weights,locations,bias,spikes_bio,spikes_ideal,rates_bio,rates
 	# 	os.chdir('eval_%s_bioneuron_%s'%(P['current_eval'],P['hyperopt']['bionrn']))
 
 
-def delete_extra_hyperparam_files(P,best_hyperparam_files):
-	from os import listdir
-	from os.path import isdir, join
-	import shutil
-	onlydirs = [join(P['directory']+P['atrb']['label'],f) for f in listdir(P['directory']+P['atrb']['label']) if isdir(join(P['directory']+P['atrb']['label'], f))]
-	for f in onlydirs:
-		if f not in best_hyperparam_files: shutil.rmtree(f)
+# def delete_extra_hyperparam_files(P,best_hyperparam_files):
+# 	from os import listdir
+# 	from os.path import isdir, join
+# 	import shutil
+# 	onlydirs = [join(P['directory']+P['atrb']['label'],f) for f in listdir(P['directory']+P['atrb']['label']) if isdir(join(P['directory']+P['atrb']['label'], f))]
+# 	for f in onlydirs:
+# 		if f not in best_hyperparam_files: shutil.rmtree(f)
 
-def plot_spikes_rates_voltage_train(P,best_results_file,target_signal,losses):
+def make_plots(P,best_results_file,target_signal,losses,all_losses):
+	import pandas as pd
 	spikes_bio=[]
 	spikes_ideal=[]
 	rates_bio=[]
 	rates_ideal=[]
+	currents_bio=[]
+	currents_ideal=[]
 	voltages=[]
 	for filename in best_results_file:
 		if P['platform']=='workstation':
@@ -176,24 +195,33 @@ def plot_spikes_rates_voltage_train(P,best_results_file,target_signal,losses):
 		spikes_ideal.append(spikes_rates_bio_ideal['spikes_ideal'])
 		rates_bio.append(spikes_rates_bio_ideal['rates_bio'])
 		rates_ideal.append(spikes_rates_bio_ideal['rates_ideal'])
+		currents_bio.append(spikes_rates_bio_ideal['currents_bio'])
+		currents_ideal.append(spikes_rates_bio_ideal['currents_ideal'])		
 		voltages.append(spikes_rates_bio_ideal['voltages'])
 	spikes_bio=np.array(spikes_bio).T
 	spikes_ideal=np.array(spikes_ideal).T
 	rates_bio=np.array(rates_bio).T
 	rates_ideal=np.array(rates_ideal).T
+	currents_bio=np.array(currents_bio).T
+	currents_ideal=np.array(currents_ideal).T	
 	voltages=np.array(voltages).T
-	rmse=np.sqrt(np.average((rates_bio-rates_ideal)**2))
+	rmse_rate=np.sqrt(np.average((rates_bio-rates_ideal)**2))
+	rmse_current=np.sqrt(np.average((currents_bio-currents_ideal)**2))
+
+	#spike raster comparison
 	sns.set(context='poster')
 	figure1, (ax0,ax1,ax2) = plt.subplots(3, 1,sharex=True)
 	timesteps=np.arange(0,P['train']['t_final'],P['dt_nengo'])
 	ax0.plot(timesteps,target_signal)
 	rasterplot(timesteps,spikes_ideal,ax=ax1,use_eventplot=True)
 	rasterplot(timesteps,spikes_bio,ax=ax2,use_eventplot=True)
-	ax0.set(ylabel='input signal \n(weighted sum)',title='total rmse (rate)=%.5f'%rmse)
+	ax0.set(ylabel='input signal \n(weighted sum)',title='total rmse (rate)=%.5f'%rmse_rate)
 	ax1.set(ylabel='ideal spikes')
 	ax2.set(ylabel='bio spikes')
 	figure1.savefig('spikes_bio_vs_ideal.png')
 	plt.close()
+
+	#neuron-by-neuron rate, current, and voltage comparison
 	try:
 		os.makedirs('bioneuron_plots')
 		os.chdir('bioneuron_plots')
@@ -201,31 +229,38 @@ def plot_spikes_rates_voltage_train(P,best_results_file,target_signal,losses):
 		os.chdir('bioneuron_plots')
 	for nrn in range(rates_bio.shape[1]):
 		figure,ax=plt.subplots(1,1)
-		bio_rates_plot=ax.plot(timesteps,rates_bio[:,nrn][:len(timesteps)],linestyle='-')
-		ideal_rates_plot=ax.plot(timesteps,rates_ideal[:,nrn][:len(timesteps)],linestyle='--',
-			color=bio_rates_plot[0].get_color())
-		ax.plot(0,0,color='k',linestyle='-',label='bioneuron')
-		ax.plot(0,0,color='k',linestyle='--',label='LIF')
+		ax.plot(timesteps,rates_bio[:,nrn][:len(timesteps)],label='bio')
+		ax.plot(timesteps,rates_ideal[:,nrn][:len(timesteps)],label='ideal')
 		loss=losses[nrn]
-		rmse=np.sqrt(np.average((rates_bio[:,nrn][:len(timesteps)]-rates_ideal[:,nrn][:len(timesteps)])**2))
-		ax.set(xlabel='time (s)',ylabel='firing rate (Hz)',title='rmse=%.5f, loss=%.5f'%(rmse,loss))
+		rmse_rate=np.sqrt(np.average((rates_bio[:,nrn][:len(timesteps)]-rates_ideal[:,nrn][:len(timesteps)])**2))
+		ax.set(xlabel='time (s)',ylabel='firing rate (Hz)',title='rmse_rate=%.5f, loss=%.5f'%(rmse_rate,loss))
+		legend=ax.legend(prop={'size':8})
 		figure.savefig('bio_vs_ideal_rates_neuron_%s'%nrn)
 		plt.close(figure)
+
 		figure2,ax2=plt.subplots(1,1)
-		ax2.plot(voltages[:,nrn])
-		ax2.set(xlabel='time (ms)',ylabel='Voltage (mV)')
-		figure2.savefig('bioneuron_%s_voltages_train.png'%nrn)
+		ax2.plot(timesteps,currents_bio[:,nrn][:len(timesteps)],label='bio')
+		ax2.plot(timesteps,currents_ideal[:,nrn][:len(timesteps)],label='ideal')
+		loss=losses[nrn]
+		rmse_current=np.sqrt(np.average((currents_bio[:,nrn][:len(timesteps)]-currents_ideal[:,nrn][:len(timesteps)])**2))
+		legend2=ax2.legend(prop={'size':8})
+		ax2.set(xlabel='time (s)',ylabel='current (nA)',title='rmse_current=%.5f, loss=%.5f'%(rmse_current,loss))
+		figure2.savefig('bio_vs_ideal_currents_neuron_%s'%nrn)
 		plt.close(figure2)
+
+		figure3,ax3=plt.subplots(1,1)
+		ax3.plot(voltages[:,nrn])
+		ax3.set(xlabel='time (ms)',ylabel='Voltage (mV)')
+		figure3.savefig('bioneuron_%s_voltages_train.png'%nrn)
+		plt.close(figure3)		
 	os.chdir('..')
 
-def plot_hyperopt_loss(P,losses):
-	import pandas as pd
 	columns=('bioneuron','eval','loss')
-	df=pd.DataFrame(columns=columns,index=np.arange(0,losses.shape[0]*losses.shape[1]))
+	df=pd.DataFrame(columns=columns,index=np.arange(0,all_losses.shape[0]*all_losses.shape[1]))
 	i=0
-	for bionrn in range(losses.shape[0]):
-		for hyp_eval in range(losses.shape[1]):
-			df.loc[i]=[bionrn,hyp_eval,losses[bionrn][hyp_eval]]
+	for bionrn in range(all_losses.shape[0]):
+		for hyp_eval in range(all_losses.shape[1]):
+			df.loc[i]=[bionrn,hyp_eval,all_losses[bionrn][hyp_eval]]
 			i+=1
 	sns.set(context='poster')
 	figure1,ax1=plt.subplots(1,1)
@@ -233,6 +268,7 @@ def plot_hyperopt_loss(P,losses):
 	ax1.set(xlabel='trial',ylabel='loss')
 	figure1.savefig('total_hyperopt_performance.png')
 	plt.close(figure1)
+
 
 def load_hyperparams(P_in):
 	P=copy.copy(P_in)

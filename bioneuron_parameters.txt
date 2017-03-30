@@ -8,7 +8,7 @@
 	'pre':{'n_neurons':100,'n_syn':5,'dim':1,'seed':33,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':1},
 	'pre2':{'n_neurons':100,'n_syn':5,'dim':1,'seed':33,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':1},
 	'pre3':{'n_neurons':100,'n_syn':5,'dim':1,'seed':33,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':1},
-	'ens_bio':{'n_neurons':10,'n_syn':5,'dim':1,'seed':66,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':30},
+	'ens_bio':{'n_neurons':10,'n_syn':5,'dim':1,'seed':66,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':100},
 	'ens_bio2':{'n_neurons':10,'n_syn':5,'dim':1,'seed':99,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':10},
 	'ens_bio3':{'n_neurons':30,'n_syn':5,'dim':1,'seed':99,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':30},
 	'ens_bio4':{'n_neurons':30,'n_syn':5,'dim':1,'seed':99,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':30},
@@ -54,6 +54,7 @@
 
 	### LOAD ###
 	'continue_optimization':False, 
+	#'directory': '/home/pduggins/bionengo/data/95ZMK8WA5/',
 	#'directory': '/home/pduggins/bionengo/data/4SLQ6LX6K/',
 
 	### SIGNALS ###

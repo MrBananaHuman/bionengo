@@ -207,7 +207,6 @@ def main():
 		file.write('\nrmse_decode_lif=')
 		file.write(str(rmse_lif))
 		file.close()
-
 		bio_rates=np.array([nengo.Lowpass(P['kernel']['tau']).filt(
 						sim.data[probe_bio_spikes][:,nrn],dt=P['dt_nengo'])
 						for nrn in range(sim.data[probe_bio_spikes].shape[1])]).T
