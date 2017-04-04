@@ -1,0 +1,10 @@
+--- SharcNET Job Epilogue ---
+              job id: 9924715
+         exit status: 0
+            cpu time: 1s / 48.0h (0 %)
+        elapsed time: 12s / 48.0h (0 %)
+
+Job completed successfully
+WARNING: Job only used 0 % of its requested walltime.
+WARNING: Job only used 0 % of its requested cpu time.
+WARNING: Job only used 8 % of allocated cpu time.
