@@ -22,6 +22,8 @@ class BahlNeuron(nengo.neurons.NeuronType):
 		self.label=label
 		if self.P['load_weights']==True: self.best_hyperparam_files=True
 		else: self.best_hyperparam_files=None
+		self.targets=None
+		self.activities=None
 		self.atrb={}
 		self.inputs={}
 
@@ -377,7 +379,7 @@ def pre_build_func(network,dt):
 		np.savez('output_ideal_%s.npz'%bio,values=bio_dict[bio]['ideal_output'])
 		os.chdir('..')
 	del lif_net, lif_sim, target_net, target_sim
-
+	print 'finishing pre_build_func'
 
 	#run the optimization
 	optimize_bioensembles(network)
@@ -394,22 +396,34 @@ def optimize_bioensembles(network):
 		P['atrb']=ens.neuron_type.atrb
 		if ens.neuron_type.best_hyperparam_files != None and P['continue_optimization']==False:
 			best_hyperparam_files, targets, activities = load_hyperparams(P) #don't train if filenames already exists
+			ens.neuron_type.best_hyperparam_files=best_hyperparam_files
+			ens.neuron_type.targets=targets
+                        ens.neuron_type.activities=activities
 		else: 
-			if P['platform']=='workstation':best_hyperparam_files, targets, activities = train_hyperparams(P)
+			if P['platform']=='workstation':
+				best_hyperparam_files, targets, activities = train_hyperparams(P)
+				ens.neuron_type.best_hyperparam_files=best_hyperparam_files
+				ens.neuron_type.targets=targets
+				ens.neuron_type.activities=activities
 			elif P['platform']=='sharcnet':
-				train_hyperparams_serial_farming(P)
-				directory=P['directory']+P['atrb']['label']+'/'
-				#wait until the necessary files have been generated
-				files_saved=False
-				print 'entering while loop...'
-				while files_saved==False:
-					try:
-						best_hyperparam_files=np.load(directory+'best_hyperparam_files.npz')['best_hyperparam_files']
-						targets=np.load(directory+'target.npz')['target']
-						activities=np.load(directory+'rates_bio.npz')['rates_bio']
-						files_saved=True
-					except IOError:
-						time.sleep(10.0)
+				train_hyperparams_serial_farming(P) #get all jobs submitted before collection
+	print 'Waiting for sharcnet jobs to finish...'
+	for ens in network.ensembles:
+		if not isinstance(ens.neuron_type,BahlNeuron): continue #only bioensembles selected
+		if ens.neuron_type.best_hyperparam_files != None: continue #only if we're not loading
+		if P['platform']=='workstation': continue #only on sharcnet
+		directory=P['directory']+P['atrb']['label']+'/'
+		#wait until the necessary files have been generated
+		files_saved=False
+		print 'entering while loop...'
+		while files_saved==False: #todo - make this more robust
+			try:
+				best_hyperparam_files=np.load(directory+'best_hyperparam_files.npz')['best_hyperparam_files']
+				targets=np.load(directory+'target.npz')['target']
+				activities=np.load(directory+'rates_bio.npz')['rates_bio']
+				files_saved=True
+			except (IOError,EOFError) as err:
+				time.sleep(1.0)
 		ens.neuron_type.best_hyperparam_files=best_hyperparam_files
 		ens.neuron_type.targets=targets
 		ens.neuron_type.activities=activities

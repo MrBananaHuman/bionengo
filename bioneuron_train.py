@@ -230,9 +230,10 @@ def simulate(P):
 
 def run_hyperopt(P):
 	#try loading hyperopt trials object from a previous run to pick up where it left off
-	os.chdir(P['directory']+P['atrb']['label'])
+        os.chdir(P['directory']+P['atrb']['label'])
+	directory=P['directory']+P['atrb']['label']
 	try:
-		trials=pickle.load(open('bioneuron_%s_hyperopt_trials.p'%P['hyperopt']['bionrn'],'rb'))
+		trials=pickle.load(open(directory+'/bioneuron_%s_hyperopt_trials.p'%P['hyperopt']['bionrn'],'rb'))
 		hyp_evals=np.arange(len(trials),P['atrb']['evals'])
 	except IOError:
 		trials=hyperopt.Trials()
@@ -250,14 +251,14 @@ def run_hyperopt(P):
 			%(P['atrb']['label'],P['hyperopt']['bionrn'],100.0*(t+1)/P['atrb']['evals'])
 		#save trials object for checkpoints / continued training later
 		if t % int(P['atrb']['evals']/10) == 0 and P['save_hyperopt_trials'] == True:
-			pickle.dump(trials,open('bioneuron_%s_hyperopt_trials.p'%P['hyperopt']['bionrn'],'wb'))
+			pickle.dump(trials,open(directory+'/bioneuron_%s_hyperopt_trials.p'%P['hyperopt']['bionrn'],'wb'))
 	#find best run's directory location
 	losses=[t['result']['loss'] for t in trials]
 	ids=[t['result']['eval'] for t in trials]
 	idx=np.argmin(losses)
 	loss=np.min(losses)
 	result=str(ids[idx])
-	pickle.dump(trials,open('bioneuron_%s_hyperopt_trials.p'%P['hyperopt']['bionrn'],'wb'))
+	pickle.dump(trials,open(directory+'/bioneuron_%s_hyperopt_trials.p'%P['hyperopt']['bionrn'],'wb'))
 	#returns eval number with minimum loss for this bioneuron
 	return [P['hyperopt']['bionrn'],int(result),losses]
 
@@ -318,7 +319,7 @@ def train_hyperparams_serial_farming(P):
 	bashfile.write('N_NEURONS=%s\n'%(P['atrb']['neurons']-1))
 	bashfile.write('RUNTIME=%s\n'%P['runtime'])
 	bashfile.write('MEMORY=%s\n'%P['memory'])
-	bashfile.write('declare -a ID_FILESNAMES\n')
+	#bashfile.write('declare -a ID_FILESNAMES\n')
 	#for bionrn in range(P['atrb']['neurons']):
 		#bashfile.write('ID_FILENAMES[%s]=%s'%(bionrn,id_filenames[bionrn]))
 	bashfile.write('cd ${DEST_DIR}\n')
@@ -353,7 +354,7 @@ def train_hyperparams_serial_farming(P):
         bashfile.write('echo "Submitting collection job, waiting for training..."\n')
         bashfile.write('OUTFILE="output_collection.txt"\n')
         bashfile.write('sqsub -r ${RUNTIME} -q serial -o ${OUTFILE} -w %s --mpp=${MEMORY} /home/psipeter/bionengo/sqsub_collect.py ${PARAMNAME}\n'%sqjobs_string)
-        bashfile.write('done;\n')
+        #bashfile.write('done;\n')
         bashfile.close()
         st = os.stat(bashfilename)
         os.chmod(bashfilename, st.st_mode | stat.S_IEXEC)
