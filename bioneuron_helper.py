@@ -177,7 +177,7 @@ def export_data(P,weights,locations,bias,spikes_bio,spikes_ideal,
 # 	for f in onlydirs:
 # 		if f not in best_hyperparam_files: shutil.rmtree(f)
 
-def make_plots(P,best_results_file,target_signal,losses,all_losses):
+def make_plots(P,best_hyperparam_files,target_signal,losses,all_losses):
 	import pandas as pd
 	spikes_bio=[]
 	spikes_ideal=[]
@@ -186,7 +186,7 @@ def make_plots(P,best_results_file,target_signal,losses,all_losses):
 	currents_bio=[]
 	currents_ideal=[]
 	voltages=[]
-	for filename in best_results_file:
+	for filename in best_hyperparam_files:
 		if P['platform']=='workstation':
 			filename=str(filename).replace('/work','/home')
 			filename=filename.replace('/psipeter','/pduggins')
@@ -255,19 +255,20 @@ def make_plots(P,best_results_file,target_signal,losses,all_losses):
 		plt.close(figure3)		
 	os.chdir('..')
 
-	columns=('bioneuron','eval','loss')
-	df=pd.DataFrame(columns=columns,index=np.arange(0,all_losses.shape[0]*all_losses.shape[1]))
-	i=0
-	for bionrn in range(all_losses.shape[0]):
-		for hyp_eval in range(all_losses.shape[1]):
-			df.loc[i]=[bionrn,hyp_eval,all_losses[bionrn][hyp_eval]]
-			i+=1
-	sns.set(context='poster')
-	figure1,ax1=plt.subplots(1,1)
-	sns.tsplot(time="eval",value="loss",unit='bioneuron',data=df)
-	ax1.set(xlabel='trial',ylabel='loss')
-	figure1.savefig('total_hyperopt_performance.png')
-	plt.close(figure1)
+	# columns=('bioneuron','eval','loss')
+	# # ipdb.set_trace()
+	# df=pd.DataFrame(columns=columns,index=np.arange(0,all_losses.shape[0]*all_losses[0].shape[0]))
+	# i=0
+	# for bionrn in range(all_losses.shape[0]):
+	# 	for hyp_eval in range(all_losses[0].shape[0]):
+	# 		df.loc[i]=[bionrn,hyp_eval,all_losses[bionrn][hyp_eval]]
+	# 		i+=1
+	# sns.set(context='poster')
+	# figure1,ax1=plt.subplots(1,1)
+	# sns.tsplot(time="eval",value="loss",unit='bioneuron',data=df)
+	# ax1.set(xlabel='trial',ylabel='loss')
+	# figure1.savefig('total_hyperopt_performance.png')
+	# plt.close(figure1)
 
 
 def load_hyperparams(P_in):
@@ -288,6 +289,7 @@ def load_hyperparams(P_in):
 	target_signal=np.load('output_ideal_%s.npz'%P['atrb']['label'])['values']
 	all_losses=np.load('all_losses.npz')['losses']
 	if P['platform']=='workstation':
-		plot_spikes_rates_voltage_train(P,best_hyperparam_files,target_signal,np.array(best_losses))
-		plot_hyperopt_loss(P,np.array(all_losses))
+		make_plots(P,best_hyperparam_files,target_signal,np.array(best_losses),np.array(all_losses))
+		# plot_spikes_rates_voltage_train(P,best_hyperparam_files,target_signal,np.array(best_losses))
+		# plot_hyperopt_loss(P,np.array(all_losses))
 	return best_hyperparam_files,target_signal,rates_bio

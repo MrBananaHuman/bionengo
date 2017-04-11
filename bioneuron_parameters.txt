@@ -5,11 +5,11 @@
 	### NENGO ###
 	'dt_nengo':0.001, #change in optimize too
 	'dt_neuron':0.0001,
-	'pre':{'n_neurons':100,'n_syn':5,'dim':1,'seed':33,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':1},
+	'pre':{'n_neurons':100,'n_syn':5,'dim':1,'seed':11,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':1},
 	'pre2':{'n_neurons':100,'n_syn':5,'dim':1,'seed':33,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':1},
 	'pre3':{'n_neurons':100,'n_syn':5,'dim':1,'seed':33,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':1},
-	'ens_bio':{'n_neurons':10,'n_syn':5,'dim':1,'seed':66,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':100},
-	'ens_bio2':{'n_neurons':10,'n_syn':5,'dim':1,'seed':99,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':10},
+	'ens_bio':{'n_neurons':100,'n_syn':5,'dim':1,'seed':66,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':1000},
+	'ens_bio2':{'n_neurons':30,'n_syn':5,'dim':1,'seed':99,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':1000},
 	'ens_bio3':{'n_neurons':30,'n_syn':5,'dim':1,'seed':99,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':30},
 	'ens_bio4':{'n_neurons':30,'n_syn':5,'dim':1,'seed':99,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':30},
 	'ens_bio5':{'n_neurons':30,'n_syn':5,'dim':1,'seed':99,'min_rate':100,'max_rate':120,'radius':1,'tau':0.1,'evals':30},
@@ -22,8 +22,8 @@
 
 	### OPTIMIZATION ###
 	'hyperopt_seed':369,
-	'w_0':0.0001, #0.0001
-	'e_0':0.0001, #0.001
+	'w_0':0.1, #0.0001
+	'e_0':1.0, #0.001
 	'b_0':1.0, #1.0
 	'synapse_type':'ExpSyn',
 	'n_seg': 5,
@@ -39,10 +39,10 @@
 	'decompose_weights':True, 			#w_ij=d_i dot e_ij
 	'complex_loss': True, 				#special functions to keep neurons out of bad hyperparam regimes
 	'save_hyperopt_trials':True, 		#set True to allow continued training once simulation finishes (reccomended, fills hard drive faster)
-	'objective_function': 'current', 	#how to compute loss in the training algorith: 'spikes' or 'current'
+	'objective_function': 'spikes', 	#how to compute loss in the training algorith: 'spikes' or 'current'
 
 	### NETWORK ###
-	'transform_pre_to_ens':0.1,
+	'transform_pre_to_ens':1.0,
 	'transform_pre2_to_ens':0.5,
 	'transform_pre3_to_ens3':0.5,
 	'transform_ens_to_ens':1.0,
@@ -54,6 +54,9 @@
 
 	### LOAD ###
 	'continue_optimization':False, 
+	'directory': '/home/pduggins/bionengo/data/72ZYVI270/',
+	#'directory': '/home/pduggins/bionengo/data/W49TSML50/',
+	#'directory': '/home/pduggins/bionengo/data/GQYY38F8J/',
 	#'directory': '/home/pduggins/bionengo/data/95ZMK8WA5/',
 	#'directory': '/home/pduggins/bionengo/data/4SLQ6LX6K/',
 
@@ -63,7 +66,7 @@
 		{'type':'equalpower','t_final':1.0,'dt':0.001,'dim':1,'mean':0.0,'std':1.0,'max_freq':5.0,'seed':None},
 	'test':
 		#{'type':'sinusoid','t_final':3.0,'dt':0.001,'dim':1,'omega':2},
-		{'type':'equalpower','t_final':1.0,'dt':0.001,'dim':1,'mean':0.0,'std':1.0,'max_freq':5.0,'seed':111},
+		{'type':'equalpower','t_final':1.0,'dt':0.001,'dim':1,'mean':0.0,'std':1.0,'max_freq':5.0,'seed':222},
 	'test2':
 		#{'type':'sinusoid','t_final':3.0,'dt':0.001,'dim':1,'omega':2},
 		#{'type':'constant','t_final':3.0,'dt':0.001,'dim':1,'mean':0.5},

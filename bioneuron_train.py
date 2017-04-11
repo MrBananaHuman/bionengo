@@ -150,18 +150,21 @@ def load_hyperopt_space(P):
 	for inpt in P['inpts'].iterkeys():
 		weights[inpt]=np.zeros((P['inpts'][inpt]['pre_neurons'],P['atrb']['n_syn']))
 		locations[inpt]=np.zeros((P['inpts'][inpt]['pre_neurons'],P['atrb']['n_syn']))
+		decoders=np.zeros((range(P['inpts'][inpt]['pre_neurons'])))
+		encoders=np.zeros((range(P['inpts'][inpt]['pre_neurons'])))
 		for pre in range(P['inpts'][inpt]['pre_neurons']):
+			decoder=P['hyperopt'][inpt][pre]['d']
+			decoders[pre]=decoder
 			for syn in range(P['atrb']['n_syn']):
 				locations[inpt][pre][syn]=P['hyperopt'][inpt][pre][syn]['l']
 				if P['decompose_weights']== True:
 					if P['single_encoder']==True: #w_ij=z_i*(d_i dot e_j)
-						weights[inpt][pre][syn]=P['hyperopt'][inpt][pre][syn]['z']*np.dot( 
-								P['hyperopt'][inpt][pre]['d'],
-								np.array(P['hyperopt'][inpt]['encoder']))
+						encoder=P['hyperopt'][inpt][pre][syn]['z']*np.array(P['hyperopt'][inpt]['encoder'])
+						weights[inpt][pre][syn]=np.dot(decoder,encoder)
 					else: #w_ij=d_i dot e_ij
-						weights[inpt][pre][syn]=np.dot( 
-								P['hyperopt'][inpt][pre]['d'],
-								np.array(P['hyperopt'][inpt][pre][syn]['e']))
+						encoder=np.array(P['hyperopt'][inpt][pre][syn]['e'])
+						weights[inpt][pre][syn]=np.dot(decoder,encoder)
+					encoders[pre]=
 				else:
 					weights[inpt][pre][syn]=P['hyperopt'][inpt][pre][syn]['w']
 	return weights,locations,bias
