@@ -1017,3 +1017,21 @@ Job completed successfully
 WARNING: Job only used 73 % of its requested walltime.
 WARNING: Job only used 73 % of its requested cpu time.
 WARNING: Job only used 33% of its requested memory.
+NEURON -- Release 7.4 (1370:16a7055d4a86) 2015-11-09
+Duke, Yale, and the BlueBrain Project -- Copyright 1984-2015
+See http://www.neuron.yale.edu/neuron/credits
+
+:0: FutureWarning: IPython widgets are experimental and may change in the future.
+Additional mechanisms from files
+ cad.mod h.mod IKM.mod kca.mod kfast.mod kslow.mod nap.mod nat.mod SlowCa.mod
+	1 
+=>> PBS: job killed: walltime 259235 exceeded limit 259200
+--- SharcNET Job Epilogue ---
+              job id: 9969591
+         exit status: -10
+            cpu time: 72.0h / 72.0h (99 %)
+        elapsed time: 72.0h / 72.0h (100 %)
+      virtual memory: 4.1G / 5.0G (81 %)
+
+Job returned with status -10.
+WARNING: Job killed because it used too much elapsed time.

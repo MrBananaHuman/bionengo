@@ -8,3 +8,15 @@ Job completed successfully
 WARNING: Job only used 0 % of its requested walltime.
 WARNING: Job only used 0 % of its requested cpu time.
 WARNING: Job only used 9 % of allocated cpu time.
+--- SharcNET Job Epilogue ---
+              job id: 9969710
+         exit status: 0
+            cpu time: 1s / 72.0h (0 %)
+        elapsed time: 7s / 72.0h (0 %)
+      virtual memory: 543.9M / 5.0G (10 %)
+
+Job completed successfully
+WARNING: Job only used 0 % of its requested walltime.
+WARNING: Job only used 0 % of its requested cpu time.
+WARNING: Job only used 14 % of allocated cpu time.
+WARNING: Job only used 10% of its requested memory.
