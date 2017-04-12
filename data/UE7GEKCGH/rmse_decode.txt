@@ -1,2 +1,0 @@
-rmse_decode_bio=0.273065084994
-rmse_decode_lif=0.229480174638
