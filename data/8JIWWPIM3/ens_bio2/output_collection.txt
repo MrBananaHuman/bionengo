@@ -1,0 +1,22 @@
+--- SharcNET Job Epilogue ---
+              job id: 10010923
+         exit status: 0
+            cpu time: 3s / 96.0h (0 %)
+        elapsed time: 15s / 96.0h (0 %)
+      virtual memory: 548.0M / 5.0G (10 %)
+
+Job completed successfully
+WARNING: Job only used 0 % of its requested walltime.
+WARNING: Job only used 0 % of its requested cpu time.
+WARNING: Job only used 20 % of allocated cpu time.
+WARNING: Job only used 10% of its requested memory.
+--- SharcNET Job Epilogue ---
+              job id: 10064275
+         exit status: 0
+            cpu time: 2s / 72.0h (0 %)
+        elapsed time: 11s / 72.0h (0 %)
+
+Job completed successfully
+WARNING: Job only used 0 % of its requested walltime.
+WARNING: Job only used 0 % of its requested cpu time.
+WARNING: Job only used 18 % of allocated cpu time.

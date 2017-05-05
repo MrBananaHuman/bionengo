@@ -1,0 +1,134 @@
+NEURON -- Release 7.4 (1370:16a7055d4a86) 2015-11-09
+Duke, Yale, and the BlueBrain Project -- Copyright 1984-2015
+See http://www.neuron.yale.edu/neuron/credits
+
+:0: FutureWarning: IPython widgets are experimental and may change in the future.
+Additional mechanisms from files
+ cad.mod h.mod IKM.mod kca.mod kfast.mod kslow.mod nap.mod nat.mod SlowCa.mod
+	1 
+Connections into ens_bio2, bioneuron 3, hyperopt 1.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 2.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 3.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 4.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 5.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 6.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 7.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 8.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 9.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 10.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 11.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 12.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 13.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 14.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 15.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 16.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 17.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 18.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 19.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 20.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 21.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 22.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 23.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 24.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 25.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 26.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 27.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 28.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 29.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 30.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 31.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 32.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 33.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 34.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 35.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 36.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 37.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 38.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 39.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 40.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 41.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 42.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 43.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 44.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 45.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 46.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 47.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 48.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 49.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 50.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 51.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 52.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 53.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 54.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 55.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 56.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 57.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 58.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 59.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 60.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 61.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 62.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 63.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 64.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 65.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 66.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 67.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 68.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 69.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 70.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 71.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 72.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 73.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 74.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 75.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 76.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 77.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 78.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 79.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 80.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 81.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 82.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 83.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 84.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 85.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 86.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 87.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 88.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 89.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 90.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 91.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 92.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 93.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 94.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 95.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 96.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 97.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 98.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 99.0%
+Connections into ens_bio2, bioneuron 3, hyperopt 100.0%
+--- SharcNET Job Epilogue ---
+              job id: 10010896
+         exit status: 0
+            cpu time: 5.9h / 96.0h (6 %)
+        elapsed time: 5.9h / 96.0h (6 %)
+      virtual memory: 1.2G / 5.0G (24 %)
+
+Job completed successfully
+WARNING: Job only used 6 % of its requested walltime.
+WARNING: Job only used 6 % of its requested cpu time.
+WARNING: Job only used 24% of its requested memory.
+NEURON -- Release 7.4 (1370:16a7055d4a86) 2015-11-09
+Duke, Yale, and the BlueBrain Project -- Copyright 1984-2015
+See http://www.neuron.yale.edu/neuron/credits
+
+:0: FutureWarning: IPython widgets are experimental and may change in the future.
+--- SharcNET Job Epilogue ---
+              job id: 10064248
+         exit status: 0
+            cpu time: 10s / 72.0h (0 %)
+        elapsed time: 19s / 72.0h (0 %)
+
+Job completed successfully
+WARNING: Job only used 0 % of its requested walltime.
+WARNING: Job only used 0 % of its requested cpu time.
+WARNING: Job only used 52 % of allocated cpu time.
